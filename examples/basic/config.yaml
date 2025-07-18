@@ -1,0 +1,67 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  env: "development"
+
+database:
+  mysql:
+    host: "localhost"
+    port: 3306
+    user: "root"
+    password: "password"
+    dbname: "example"
+  
+  mongo:
+    uri: "mongodb://localhost:27017"
+    database: "example"
+
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+
+rabbitmq:
+  host: "localhost"
+  port: 5672
+  username: "guest"
+  password: "guest"
+  vhost: "/"
+
+monitoring:
+  port: 9090
+  path: "/metrics"
+
+middleware:
+  logger:
+    level: "info"
+    format: "json"
+    skip_paths: ["/health", "/metrics"]
+    enable_body: true
+    max_body_size: 1024
+    sensitive_headers: ["authorization", "x-api-key"]
+  
+  auth:
+    skip_paths: ["/health", "/metrics", "/api/v1/ping", "/api/v1/auth/login"]
+    token_header: "Authorization"
+    require_bearer: true
+    enable_blacklist: true
+  
+  rate_limit:
+    enable: true
+    window: "1m"
+    limit: 100
+    skip_paths: ["/health", "/metrics"]
+    key_generator: "ip"
+    headers: true
+  
+  security:
+    enable_cors: true
+    cors_origins: ["*"]
+    enable_security_headers: true
+    frame_options: "DENY"
+    content_type_options: "nosniff"
+
+jwt:
+  secret_key: "your-secret-key-here"
+  access_expiration_mins: 60
+  refresh_expiration_mins: 10080
