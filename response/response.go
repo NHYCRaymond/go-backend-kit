@@ -2,15 +2,19 @@ package response
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 // Response represents the standard API response format
 type Response struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
+	Code      int         `json:"code"`
+	Message   string      `json:"message,omitempty"`
+	Data      interface{} `json:"data,omitempty"`
+	RequestID string      `json:"request_id,omitempty"`
+	TraceID   string      `json:"trace_id,omitempty"`
+	Timestamp int64       `json:"timestamp"`
 }
 
 // PaginatedResponse represents a paginated API response
@@ -19,6 +23,9 @@ type PaginatedResponse struct {
 	Message    string      `json:"message,omitempty"`
 	Data       interface{} `json:"data,omitempty"`
 	Pagination *Pagination `json:"pagination,omitempty"`
+	RequestID  string      `json:"request_id,omitempty"`
+	TraceID    string      `json:"trace_id,omitempty"`
+	Timestamp  int64       `json:"timestamp"`
 }
 
 // Pagination represents pagination information
@@ -57,20 +64,47 @@ const (
 	MsgServiceUnavailable = "service unavailable"
 )
 
+// getRequestMeta extracts request metadata from context
+func getRequestMeta(c *gin.Context) (string, string, int64) {
+	var requestID, traceID string
+	
+	if id, exists := c.Get("request_id"); exists {
+		if reqID, ok := id.(string); ok {
+			requestID = reqID
+		}
+	}
+	
+	if id, exists := c.Get("trace_id"); exists {
+		if trcID, ok := id.(string); ok {
+			traceID = trcID
+		}
+	}
+	
+	return requestID, traceID, time.Now().Unix()
+}
+
 // Success sends a successful response
 func Success(c *gin.Context, data interface{}) {
+	requestID, traceID, timestamp := getRequestMeta(c)
 	c.JSON(http.StatusOK, Response{
-		Code: CodeSuccess,
-		Data: data,
+		Code:      CodeSuccess,
+		Data:      data,
+		RequestID: requestID,
+		TraceID:   traceID,
+		Timestamp: timestamp,
 	})
 }
 
 // SuccessWithMessage sends a successful response with custom message
 func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
+	requestID, traceID, timestamp := getRequestMeta(c)
 	c.JSON(http.StatusOK, Response{
-		Code:    CodeSuccess,
-		Message: message,
-		Data:    data,
+		Code:      CodeSuccess,
+		Message:   message,
+		Data:      data,
+		RequestID: requestID,
+		TraceID:   traceID,
+		Timestamp: timestamp,
 	})
 }
 
@@ -87,9 +121,13 @@ func Error(c *gin.Context, httpStatus int, code interface{}, message string) {
 		errorCode = httpStatus
 	}
 
+	requestID, traceID, timestamp := getRequestMeta(c)
 	c.JSON(httpStatus, Response{
-		Code:    errorCode,
-		Message: message,
+		Code:      errorCode,
+		Message:   message,
+		RequestID: requestID,
+		TraceID:   traceID,
+		Timestamp: timestamp,
 	})
 }
 
@@ -159,28 +197,40 @@ func ServiceUnavailable(c *gin.Context, message string) {
 
 // Paginated sends a paginated response
 func Paginated(c *gin.Context, data interface{}, pagination *Pagination) {
+	requestID, traceID, timestamp := getRequestMeta(c)
 	c.JSON(http.StatusOK, PaginatedResponse{
 		Code:       CodeSuccess,
 		Data:       data,
 		Pagination: pagination,
+		RequestID:  requestID,
+		TraceID:    traceID,
+		Timestamp:  timestamp,
 	})
 }
 
 // PaginatedWithMessage sends a paginated response with custom message
 func PaginatedWithMessage(c *gin.Context, message string, data interface{}, pagination *Pagination) {
+	requestID, traceID, timestamp := getRequestMeta(c)
 	c.JSON(http.StatusOK, PaginatedResponse{
 		Code:       CodeSuccess,
 		Message:    message,
 		Data:       data,
 		Pagination: pagination,
+		RequestID:  requestID,
+		TraceID:    traceID,
+		Timestamp:  timestamp,
 	})
 }
 
 // Created sends a created response
 func Created(c *gin.Context, data interface{}) {
+	requestID, traceID, timestamp := getRequestMeta(c)
 	c.JSON(http.StatusCreated, Response{
-		Code: CodeSuccess,
-		Data: data,
+		Code:      CodeSuccess,
+		Data:      data,
+		RequestID: requestID,
+		TraceID:   traceID,
+		Timestamp: timestamp,
 	})
 }
 
@@ -191,10 +241,14 @@ func NoContent(c *gin.Context) {
 
 // JSON sends a custom JSON response
 func JSON(c *gin.Context, httpStatus int, code int, message string, data interface{}) {
+	requestID, traceID, timestamp := getRequestMeta(c)
 	c.JSON(httpStatus, Response{
-		Code:    code,
-		Message: message,
-		Data:    data,
+		Code:      code,
+		Message:   message,
+		Data:      data,
+		RequestID: requestID,
+		TraceID:   traceID,
+		Timestamp: timestamp,
 	})
 }
 

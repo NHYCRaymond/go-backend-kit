@@ -48,13 +48,17 @@ func (l *LoggerMiddleware) Handler() gin.HandlerFunc {
 		// Start timer
 		start := time.Now()
 
-		// Get or generate request ID
-		requestID := c.GetHeader("X-Request-ID")
+		// Get request ID from context (should be set by RequestID middleware)
+		requestID := GetRequestIDFromLogger(c)
 		if requestID == "" {
+			// Fallback if RequestID middleware not used
 			requestID = uuid.New().String()
+			c.Set("request_id", requestID)
+			c.Header("X-Request-ID", requestID)
 		}
-		c.Set("request_id", requestID)
-		c.Header("X-Request-ID", requestID)
+		
+		// Get trace ID if available
+		traceID := GetTraceIDFromLogger(c)
 
 		// Read request body if enabled
 		var requestBody []byte
@@ -85,8 +89,14 @@ func (l *LoggerMiddleware) Handler() gin.HandlerFunc {
 			"path", c.Request.URL.Path,
 			"status", c.Writer.Status(),
 			"duration", duration.String(),
+			"duration_ms", duration.Milliseconds(),
 			"ip", c.ClientIP(),
 			"user_agent", c.Request.UserAgent(),
+		}
+		
+		// Add trace ID if available
+		if traceID != "" {
+			fields = append(fields, "trace_id", traceID)
 		}
 
 		// Add query parameters if any
@@ -174,23 +184,42 @@ func (w *bodyLogWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-// RequestID middleware adds request ID to context
-func RequestID() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		requestID := c.GetHeader("X-Request-ID")
-		if requestID == "" {
-			requestID = uuid.New().String()
-		}
-		
-		c.Set("request_id", requestID)
-		c.Header("X-Request-ID", requestID)
-		
-		c.Next()
+// LogWithRequestID creates a logger with request ID context
+func LogWithRequestID(c *gin.Context, logger *slog.Logger) *slog.Logger {
+	requestID := GetRequestIDFromLogger(c)
+	traceID := GetTraceIDFromLogger(c)
+	
+	logFields := []any{"request_id", requestID}
+	if traceID != "" {
+		logFields = append(logFields, "trace_id", traceID)
 	}
+	
+	return logger.With(logFields...)
 }
 
-// GetRequestID gets request ID from context
-func GetRequestID(c *gin.Context) string {
+// GetStructuredLogFields returns structured log fields for the request
+func GetStructuredLogFields(c *gin.Context) map[string]interface{} {
+	fields := map[string]interface{}{
+		"request_id": GetRequestIDFromLogger(c),
+		"method":     c.Request.Method,
+		"path":       c.Request.URL.Path,
+		"ip":         c.ClientIP(),
+		"user_agent": c.Request.UserAgent(),
+	}
+	
+	if traceID := GetTraceIDFromLogger(c); traceID != "" {
+		fields["trace_id"] = traceID
+	}
+	
+	if userID, exists := c.Get("user_id"); exists {
+		fields["user_id"] = userID
+	}
+	
+	return fields
+}
+
+// GetRequestIDFromLogger gets request ID from context (logger middleware compatible)
+func GetRequestIDFromLogger(c *gin.Context) string {
 	if requestID, exists := c.Get("request_id"); exists {
 		if id, ok := requestID.(string); ok {
 			return id
@@ -198,3 +227,19 @@ func GetRequestID(c *gin.Context) string {
 	}
 	return ""
 }
+
+// GetTraceIDFromLogger gets trace ID from context (logger middleware compatible)
+func GetTraceIDFromLogger(c *gin.Context) string {
+	if traceID, exists := c.Get("trace_id"); exists {
+		if id, ok := traceID.(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+// GetRequestID is an alias for GetRequestIDFromLogger for backward compatibility
+func GetRequestID(c *gin.Context) string {
+	return GetRequestIDFromLogger(c)
+}
+

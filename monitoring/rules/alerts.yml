@@ -1,0 +1,204 @@
+groups:
+  - name: go-backend-kit-alerts
+    rules:
+      # API响应时间告警
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(gin_request_duration_seconds_bucket[5m])) > 1
+        for: 2m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API response time detected"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.method }} {{ $labels.route }}"
+
+      - alert: VeryHighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(gin_request_duration_seconds_bucket[5m])) > 5
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Very high API response time detected"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.method }} {{ $labels.route }}"
+
+      # 错误率告警
+      - alert: HighErrorRate
+        expr: rate(gin_requests_total{status_code=~"5.."}[5m]) / rate(gin_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.method }} {{ $labels.route }}"
+
+      - alert: CriticalErrorRate
+        expr: rate(gin_requests_total{status_code=~"5.."}[5m]) / rate(gin_requests_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.method }} {{ $labels.route }}"
+
+      # SLA违规告警
+      - alert: SLAViolation
+        expr: rate(sla_violations_total[5m]) > 0.01
+        for: 1m
+        labels:
+          severity: warning
+          component: sla
+        annotations:
+          summary: "SLA violation detected"
+          description: "SLA violations rate is {{ $value }} for {{ $labels.endpoint }}"
+
+      # 系统资源告警
+      - alert: HighMemoryUsage
+        expr: memory_usage_bytes / memory_total_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: CriticalMemoryUsage
+        expr: memory_usage_bytes / memory_total_bytes > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: HighGoroutineCount
+        expr: goroutines_total > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High goroutine count detected"
+          description: "Goroutine count is {{ $value }}"
+
+      - alert: CriticalGoroutineCount
+        expr: goroutines_total > 5000
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical goroutine count detected"
+          description: "Goroutine count is {{ $value }}"
+
+      # 数据库告警
+      - alert: DatabaseConnectionsHigh
+        expr: db_connections_active > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database connections detected"
+          description: "Active database connections: {{ $value }} for {{ $labels.database }}"
+
+      - alert: DatabaseQuerySlow
+        expr: rate(db_query_duration_seconds_sum[5m]) / rate(db_query_duration_seconds_count[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query time is {{ $value }}s for {{ $labels.operation }}"
+
+      # Redis告警
+      - alert: RedisCommandsSlow
+        expr: rate(redis_commands_duration_seconds_sum[5m]) / rate(redis_commands_duration_seconds_count[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Slow Redis commands detected"
+          description: "Average Redis command time is {{ $value }}s for {{ $labels.command }}"
+
+      # 认证告警
+      - alert: HighAuthenticationFailures
+        expr: rate(authentication_attempts_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "High authentication failure rate detected"
+          description: "Authentication failure rate is {{ $value }}/sec for {{ $labels.method }}"
+
+      # 限流告警
+      - alert: HighRateLimitHits
+        expr: rate(rate_limit_hits_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "High rate limit hits detected"
+          description: "Rate limit hits: {{ $value }}/sec for {{ $labels.endpoint }}"
+
+      # 缓存告警
+      - alert: LowCacheHitRate
+        expr: rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Low cache hit rate detected"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} for {{ $labels.cache_type }}"
+
+      # 外部服务告警
+      - alert: ExternalServiceDown
+        expr: rate(external_service_calls_total{status=~"5.."}[5m]) / rate(external_service_calls_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          component: external
+        annotations:
+          summary: "External service experiencing issues"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.service }}"
+
+      # 消息队列告警
+      - alert: MessageQueueLag
+        expr: rate(message_queue_published_total[5m]) - rate(message_queue_consumed_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: messagequeue
+        annotations:
+          summary: "Message queue lag detected"
+          description: "Message queue lag: {{ $value }} messages/sec for {{ $labels.queue }}"
+
+      # 应用健康告警
+      - alert: ApplicationDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "Application is down"
+          description: "Application {{ $labels.instance }} is down"
+
+      - alert: HighActiveRequests
+        expr: gin_active_requests > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "High number of active requests"
+          description: "Active requests: {{ $value }} for {{ $labels.route }}"

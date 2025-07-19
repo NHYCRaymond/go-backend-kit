@@ -1,0 +1,19 @@
+# Prometheus 配置示例
+# 请将以下内容添加到你的 Prometheus 配置文件中
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Prometheus 自身的监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Go Backend Kit 应用监控
+  - job_name: 'go-backend-kit'
+    static_configs:
+      - targets: ['localhost:9091']  # 应用的 metrics 端口
+    metrics_path: '/metrics'
+    scrape_interval: 10s

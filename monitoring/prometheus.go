@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/NHYCRaymond/go-backend-kit/config"
@@ -148,6 +149,126 @@ var (
 			Help: "Number of requests currently being processed",
 		},
 	)
+
+	// System metrics
+	CPUUsage = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "cpu_usage_percent",
+			Help: "Current CPU usage percentage",
+		},
+	)
+
+	MemoryUsage = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "memory_usage_bytes",
+			Help: "Current memory usage in bytes",
+		},
+	)
+
+	MemoryTotal = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "memory_total_bytes",
+			Help: "Total available memory in bytes",
+		},
+	)
+
+	Goroutines = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "goroutines_total",
+			Help: "Number of goroutines currently running",
+		},
+	)
+
+	GCDuration = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "gc_duration_seconds",
+			Help:    "Time spent in garbage collection",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+
+	// Middleware metrics
+	AuthenticationAttempts = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "authentication_attempts_total",
+			Help: "Total number of authentication attempts",
+		},
+		[]string{"status", "method"},
+	)
+
+	RateLimitHits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rate_limit_hits_total",
+			Help: "Total number of rate limit hits",
+		},
+		[]string{"key", "endpoint"},
+	)
+
+	CacheHits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cache_hits_total",
+			Help: "Total number of cache hits",
+		},
+		[]string{"cache_type", "key"},
+	)
+
+	CacheMisses = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cache_misses_total",
+			Help: "Total number of cache misses",
+		},
+		[]string{"cache_type", "key"},
+	)
+
+	// Business domain metrics
+	UserRegistrations = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "user_registrations_total",
+			Help: "Total number of user registrations",
+		},
+	)
+
+	UserLogins = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "user_logins_total",
+			Help: "Total number of user logins",
+		},
+		[]string{"status"},
+	)
+
+	APICallsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "api_calls_total",
+			Help: "Total number of API calls",
+		},
+		[]string{"service", "operation", "status"},
+	)
+
+	ErrorsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "errors_total",
+			Help: "Total number of errors",
+		},
+		[]string{"type", "component", "severity"},
+	)
+
+	// External service metrics
+	ExternalServiceCalls = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "external_service_calls_total",
+			Help: "Total number of external service calls",
+		},
+		[]string{"service", "endpoint", "status"},
+	)
+
+	ExternalServiceDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "external_service_duration_seconds",
+			Help:    "Duration of external service calls",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"service", "endpoint"},
+	)
 )
 
 // StartServer starts the Prometheus metrics server
@@ -171,6 +292,9 @@ func StartServer(cfg *config.MonitoringConfig, logger *slog.Logger) {
 		}
 	}()
 
+	// Start system metrics collection
+	go collectSystemMetrics()
+
 	mux := http.NewServeMux()
 	
 	// Metrics endpoint
@@ -184,6 +308,18 @@ func StartServer(cfg *config.MonitoringConfig, logger *slog.Logger) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
+	})
+
+	// Ready endpoint for Kubernetes readiness probe
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Ready"))
+	})
+
+	// Live endpoint for Kubernetes liveness probe
+	mux.HandleFunc("/live", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Alive"))
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
@@ -313,4 +449,124 @@ func SetRedisConnections(active int) {
 // SetAppInfo sets application information
 func SetAppInfo(version, instanceID string) {
 	AppInfo.WithLabelValues(version, instanceID).Set(1)
+}
+
+// collectSystemMetrics collects system metrics periodically
+func collectSystemMetrics() {
+	var m runtime.MemStats
+	for {
+		// Collect memory stats
+		runtime.ReadMemStats(&m)
+		MemoryUsage.Set(float64(m.Alloc))
+		MemoryTotal.Set(float64(m.Sys))
+		
+		// Collect goroutine count
+		Goroutines.Set(float64(runtime.NumGoroutine()))
+		
+		// Collect GC stats
+		GCDuration.Observe(float64(m.PauseNs[(m.NumGC+255)%256]) / 1e9)
+		
+		time.Sleep(15 * time.Second)
+	}
+}
+
+// RecordAuthenticationAttempt records authentication attempt metrics
+func RecordAuthenticationAttempt(status, method string) {
+	AuthenticationAttempts.WithLabelValues(status, method).Inc()
+}
+
+// RecordRateLimitHit records rate limit hit metrics
+func RecordRateLimitHit(key, endpoint string) {
+	RateLimitHits.WithLabelValues(key, endpoint).Inc()
+}
+
+// RecordCacheHit records cache hit metrics
+func RecordCacheHit(cacheType, key string) {
+	CacheHits.WithLabelValues(cacheType, key).Inc()
+}
+
+// RecordCacheMiss records cache miss metrics
+func RecordCacheMiss(cacheType, key string) {
+	CacheMisses.WithLabelValues(cacheType, key).Inc()
+}
+
+// RecordUserRegistration records user registration metrics
+func RecordUserRegistration() {
+	UserRegistrations.Inc()
+}
+
+// RecordUserLogin records user login metrics
+func RecordUserLogin(status string) {
+	UserLogins.WithLabelValues(status).Inc()
+}
+
+// RecordAPICall records API call metrics
+func RecordAPICall(service, operation, status string) {
+	APICallsTotal.WithLabelValues(service, operation, status).Inc()
+}
+
+// RecordError records error metrics
+func RecordError(errorType, component, severity string) {
+	ErrorsTotal.WithLabelValues(errorType, component, severity).Inc()
+}
+
+// RecordExternalServiceCall records external service call metrics
+func RecordExternalServiceCall(service, endpoint, status string, duration time.Duration) {
+	ExternalServiceCalls.WithLabelValues(service, endpoint, status).Inc()
+	ExternalServiceDuration.WithLabelValues(service, endpoint).Observe(duration.Seconds())
+}
+
+// GetCacheHitRatio calculates cache hit ratio
+func GetCacheHitRatio(cacheType string) float64 {
+	// This would need to be implemented based on your cache implementation
+	// For now, return 0 as placeholder
+	return 0.0
+}
+
+// DatabaseMetricsCollector collects database metrics from database instances
+type DatabaseMetricsCollector struct {
+	databases map[string]interface{}
+}
+
+// NewDatabaseMetricsCollector creates a new database metrics collector
+func NewDatabaseMetricsCollector(databases map[string]interface{}) *DatabaseMetricsCollector {
+	return &DatabaseMetricsCollector{
+		databases: databases,
+	}
+}
+
+// CollectDatabaseMetrics collects metrics from all registered databases
+func (c *DatabaseMetricsCollector) CollectDatabaseMetrics() {
+	for name, _ := range c.databases {
+		// This would need to be implemented based on your database interface
+		// For now, just set placeholder values
+		SetDBConnections(name, 10, 5) // active, idle
+	}
+}
+
+// HealthCheckCollector provides health check metrics
+type HealthCheckCollector struct {
+	healthChecks map[string]func() error
+}
+
+// NewHealthCheckCollector creates a new health check collector
+func NewHealthCheckCollector() *HealthCheckCollector {
+	return &HealthCheckCollector{
+		healthChecks: make(map[string]func() error),
+	}
+}
+
+// RegisterHealthCheck registers a health check function
+func (c *HealthCheckCollector) RegisterHealthCheck(name string, check func() error) {
+	c.healthChecks[name] = check
+}
+
+// CollectHealthMetrics collects health check metrics
+func (c *HealthCheckCollector) CollectHealthMetrics() {
+	for name, check := range c.healthChecks {
+		err := check()
+		if err != nil {
+			RecordError("health_check", name, "error")
+		}
+	}
 }

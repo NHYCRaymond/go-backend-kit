@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'go-backend-kit'
+    static_configs:
+      - targets: ['localhost:9090']  # 你的应用监控端点
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 10s
+
+  # 如果你有其他服务运行中
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:6379']
+    metrics_path: '/metrics'
+
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['localhost:3306']
+    metrics_path: '/metrics'

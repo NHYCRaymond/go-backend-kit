@@ -8,8 +8,8 @@ database:
     host: "localhost"
     port: 3306
     user: "root"
-    password: "password"
-    dbname: "example"
+    password: "rootpassword"
+    dbname: "qiuqiuradar"
   
   mongo:
     uri: "mongodb://localhost:27017"
@@ -28,7 +28,7 @@ rabbitmq:
   vhost: "/"
 
 monitoring:
-  port: 9090
+  port: 9091
   path: "/metrics"
 
 middleware:
