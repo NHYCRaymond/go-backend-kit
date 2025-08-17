@@ -38,16 +38,16 @@ func New(cfg config.ServerConfig, router *gin.Engine, logger *slog.Logger) *Serv
 // Start starts the HTTP server
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
-	
+
 	s.httpServer = &http.Server{
 		Addr:    addr,
 		Handler: s.router,
-		
+
 		// Timeouts
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
-		
+
 		// Headers
 		ReadHeaderTimeout: 10 * time.Second,
 		MaxHeaderBytes:    1 << 20, // 1MB
@@ -56,7 +56,7 @@ func (s *Server) Start() error {
 	// Start server in a goroutine
 	go func() {
 		s.logger.Info("Starting HTTP server", "address", addr, "env", s.config.Env)
-		
+
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			s.logger.Error("HTTP server failed to start", "error", err)
 			os.Exit(1)
@@ -70,16 +70,16 @@ func (s *Server) Start() error {
 // StartWithTLS starts the HTTP server with TLS
 func (s *Server) StartWithTLS(certFile, keyFile string) error {
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
-	
+
 	s.httpServer = &http.Server{
 		Addr:    addr,
 		Handler: s.router,
-		
+
 		// Timeouts
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
-		
+
 		// Headers
 		ReadHeaderTimeout: 10 * time.Second,
 		MaxHeaderBytes:    1 << 20, // 1MB
@@ -88,7 +88,7 @@ func (s *Server) StartWithTLS(certFile, keyFile string) error {
 	// Start server in a goroutine
 	go func() {
 		s.logger.Info("Starting HTTPS server", "address", addr, "env", s.config.Env)
-		
+
 		if err := s.httpServer.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
 			s.logger.Error("HTTPS server failed to start", "error", err)
 			os.Exit(1)
@@ -102,7 +102,7 @@ func (s *Server) StartWithTLS(certFile, keyFile string) error {
 // Stop stops the HTTP server gracefully
 func (s *Server) Stop(ctx context.Context) error {
 	s.logger.Info("Stopping HTTP server...")
-	
+
 	if s.httpServer == nil {
 		return nil
 	}

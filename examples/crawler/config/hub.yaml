@@ -1,0 +1,80 @@
+# Hub Configuration
+# Central coordinator for the crawler cluster
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  env: "production"
+
+# gRPC server for node communication
+grpc:
+  address: ":50051"
+  max_connections: 100
+  keepalive:
+    time: 30s
+    timeout: 10s
+
+# Redis configuration
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+  pool_size: 10
+  min_idle_conns: 5
+
+# MongoDB configuration for task scheduling
+database:
+  mongo:
+    uri: "mongodb://localhost:27017"
+    database: "crawler"
+    max_pool_size: 10
+    min_pool_size: 2
+
+# Scheduler configuration
+scheduler:
+  enabled: true
+  queue_prefix: "crawler"
+  watch_interval: 30s
+  cleanup_interval: 1h
+  retention_days: 7
+
+# Coordinator configuration
+coordinator:
+  redis_prefix: "crawler"
+  max_retries: 3
+  task_timeout: 5m
+  reassign_interval: 30s
+  batch_size: 10
+
+# Dispatcher configuration
+dispatcher:
+  queue_type: "redis"
+  strategy: "least_load"
+  batch_size: 10
+  max_retries: 3
+  timeout: 30s
+  redis_prefix: "crawler"
+
+# Cluster management
+cluster:
+  heartbeat_interval: 10s
+  heartbeat_timeout: 30s
+  node_cleanup_interval: 60s
+
+# Monitoring
+monitoring:
+  metrics_interval: 30s
+  status_log_interval: 60s
+
+# Logging configuration
+logger:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  add_source: false
+  
+# Event bus configuration
+eventbus:
+  redis_prefix: "crawler"
+  retention_days: 7
+  cleanup_interval: 1h

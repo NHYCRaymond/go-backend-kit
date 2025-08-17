@@ -152,14 +152,14 @@ func GinMetricsMiddleware(config *MetricsConfig) gin.HandlerFunc {
 
 		start := time.Now()
 		method := c.Request.Method
-		
+
 		// Get normalized route path
 		route := normalizeRoute(c.FullPath(), c.Request.URL.Path, config.PathGrouping)
-		
+
 		// Wrap response writer to capture response size
 		wrapped := &ginResponseWriter{
 			ResponseWriter: c.Writer,
-			size:          0,
+			size:           0,
 		}
 		c.Writer = wrapped
 
@@ -191,7 +191,7 @@ func GinMetricsMiddleware(config *MetricsConfig) gin.HandlerFunc {
 				requestID = reqID
 			}
 		}
-		
+
 		// Record metrics
 		GinRequestsTotal.WithLabelValues(method, route, statusCodeStr).Inc()
 		GinRequestDuration.WithLabelValues(method, route).Observe(durationSeconds)

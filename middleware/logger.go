@@ -56,7 +56,7 @@ func (l *LoggerMiddleware) Handler() gin.HandlerFunc {
 			c.Set("request_id", requestID)
 			c.Header("X-Request-ID", requestID)
 		}
-		
+
 		// Get trace ID if available
 		traceID := GetTraceIDFromLogger(c)
 
@@ -93,7 +93,7 @@ func (l *LoggerMiddleware) Handler() gin.HandlerFunc {
 			"ip", c.ClientIP(),
 			"user_agent", c.Request.UserAgent(),
 		}
-		
+
 		// Add trace ID if available
 		if traceID != "" {
 			fields = append(fields, "trace_id", traceID)
@@ -149,7 +149,7 @@ func (l *LoggerMiddleware) Handler() gin.HandlerFunc {
 // isSensitiveHeader checks if header contains sensitive information
 func (l *LoggerMiddleware) isSensitiveHeader(name string) bool {
 	name = strings.ToLower(name)
-	
+
 	// Default sensitive headers
 	sensitiveHeaders := []string{
 		"authorization",
@@ -188,12 +188,12 @@ func (w *bodyLogWriter) Write(b []byte) (int, error) {
 func LogWithRequestID(c *gin.Context, logger *slog.Logger) *slog.Logger {
 	requestID := GetRequestIDFromLogger(c)
 	traceID := GetTraceIDFromLogger(c)
-	
+
 	logFields := []any{"request_id", requestID}
 	if traceID != "" {
 		logFields = append(logFields, "trace_id", traceID)
 	}
-	
+
 	return logger.With(logFields...)
 }
 
@@ -206,15 +206,15 @@ func GetStructuredLogFields(c *gin.Context) map[string]interface{} {
 		"ip":         c.ClientIP(),
 		"user_agent": c.Request.UserAgent(),
 	}
-	
+
 	if traceID := GetTraceIDFromLogger(c); traceID != "" {
 		fields["trace_id"] = traceID
 	}
-	
+
 	if userID, exists := c.Get("user_id"); exists {
 		fields["user_id"] = userID
 	}
-	
+
 	return fields
 }
 
@@ -242,4 +242,3 @@ func GetTraceIDFromLogger(c *gin.Context) string {
 func GetRequestID(c *gin.Context) string {
 	return GetRequestIDFromLogger(c)
 }
-

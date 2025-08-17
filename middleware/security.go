@@ -73,7 +73,7 @@ func (s *SecurityMiddleware) CORSMiddleware() gin.HandlerFunc {
 	}
 
 	corsConfig := cors.DefaultConfig()
-	
+
 	// Set allowed origins
 	if len(s.config.CORSOrigins) > 0 {
 		corsConfig.AllowOrigins = s.config.CORSOrigins
@@ -131,11 +131,11 @@ func SecureHeaders() gin.HandlerFunc {
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("Content-Security-Policy", "default-src 'self'")
-		
+
 		if c.Request.TLS != nil {
 			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
-		
+
 		c.Next()
 	}
 }

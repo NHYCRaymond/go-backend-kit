@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/NHYCRaymond/go-backend-kit/config"
@@ -12,14 +11,9 @@ import (
 )
 
 type MySQLDatabase struct {
-	db             *gorm.DB
-	config         config.MySQLConfig
-	connected      bool
-	connectionTime time.Duration
-	lastError      string
-	queryCount     int64
-	errorCount     int64
-	mutex          sync.RWMutex
+	BaseDatabase
+	db     *gorm.DB
+	config config.MySQLConfig
 }
 
 func NewMySQL(cfg config.MySQLConfig) *MySQLDatabase {
@@ -29,9 +23,6 @@ func NewMySQL(cfg config.MySQLConfig) *MySQLDatabase {
 }
 
 func (m *MySQLDatabase) Connect(ctx context.Context) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	start := time.Now()
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Asia%%2FShanghai&allowNativePasswords=true&tls=false&time_zone=%%27Asia%%2FShanghai%%27",
@@ -44,15 +35,15 @@ func (m *MySQLDatabase) Connect(ctx context.Context) error {
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		m.lastError = err.Error()
-		m.errorCount++
+		m.SetLastError(err.Error())
+		m.IncrementErrorCount()
 		return fmt.Errorf("failed to connect to MySQL: %w", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		m.lastError = err.Error()
-		m.errorCount++
+		m.SetLastError(err.Error())
+		m.IncrementErrorCount()
 		return fmt.Errorf("failed to get SQL DB: %w", err)
 	}
 
@@ -63,24 +54,21 @@ func (m *MySQLDatabase) Connect(ctx context.Context) error {
 
 	// Test connection
 	if err := sqlDB.Ping(); err != nil {
-		m.lastError = err.Error()
-		m.errorCount++
+		m.SetLastError(err.Error())
+		m.IncrementErrorCount()
 		return fmt.Errorf("failed to ping MySQL: %w", err)
 	}
 
 	m.db = db
-	m.connected = true
-	m.connectionTime = time.Since(start)
-	m.lastError = ""
+	m.SetConnected(true)
+	m.SetConnectionTime(time.Since(start))
+	m.SetLastError("")
 
 	return nil
 }
 
 func (m *MySQLDatabase) Disconnect(ctx context.Context) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	if !m.connected || m.db == nil {
+	if !m.IsConnected() || m.db == nil {
 		return nil
 	}
 
@@ -90,21 +78,18 @@ func (m *MySQLDatabase) Disconnect(ctx context.Context) error {
 	}
 
 	if err := sqlDB.Close(); err != nil {
-		m.lastError = err.Error()
-		m.errorCount++
+		m.SetLastError(err.Error())
+		m.IncrementErrorCount()
 		return err
 	}
 
-	m.connected = false
+	m.SetConnected(false)
 	m.db = nil
 	return nil
 }
 
 func (m *MySQLDatabase) HealthCheck(ctx context.Context) error {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
-
-	if !m.connected || m.db == nil {
+	if !m.IsConnected() || m.db == nil {
 		return fmt.Errorf("MySQL not connected")
 	}
 
@@ -136,14 +121,14 @@ func (m *MySQLDatabase) Stats() DatabaseStats {
 
 	stats := DatabaseStats{
 		Type:           TypeMySQL,
-		Connected:      m.connected,
+		Connected:      m.IsConnected(),
 		ConnectionTime: m.connectionTime,
-		TotalQueries:   m.queryCount,
-		ErrorCount:     m.errorCount,
-		LastError:      m.lastError,
+		TotalQueries:   m.GetQueryCount(),
+		ErrorCount:     m.GetErrorCount(),
+		LastError:      m.GetLastError(),
 	}
 
-	if m.connected && m.db != nil {
+	if m.IsConnected() && m.db != nil {
 		if sqlDB, err := m.db.DB(); err == nil {
 			dbStats := sqlDB.Stats()
 			stats.MaxConnections = dbStats.MaxOpenConnections
@@ -158,13 +143,13 @@ func (m *MySQLDatabase) Stats() DatabaseStats {
 func (m *MySQLDatabase) IncrementQueryCount() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	m.queryCount++
+	m.IncrementQueryCount()
 }
 
 func (m *MySQLDatabase) IncrementErrorCount() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	m.errorCount++
+	m.IncrementErrorCount()
 }
 
 // Legacy function for backward compatibility

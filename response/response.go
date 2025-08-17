@@ -40,46 +40,46 @@ type Pagination struct {
 
 // Error codes
 const (
-	CodeSuccess           = 0
-	CodeBadRequest        = 400
-	CodeUnauthorized      = 401
-	CodeForbidden         = 403
-	CodeNotFound          = 404
-	CodeConflict          = 409
-	CodeTooManyRequests   = 429
-	CodeInternalError     = 500
+	CodeSuccess            = 0
+	CodeBadRequest         = 400
+	CodeUnauthorized       = 401
+	CodeForbidden          = 403
+	CodeNotFound           = 404
+	CodeConflict           = 409
+	CodeTooManyRequests    = 429
+	CodeInternalError      = 500
 	CodeServiceUnavailable = 503
 )
 
 // Error messages
 const (
-	MsgSuccess           = "success"
-	MsgBadRequest        = "bad request"
-	MsgUnauthorized      = "unauthorized"
-	MsgForbidden         = "forbidden"
-	MsgNotFound          = "not found"
-	MsgConflict          = "conflict"
-	MsgTooManyRequests   = "too many requests"
-	MsgInternalError     = "internal server error"
+	MsgSuccess            = "success"
+	MsgBadRequest         = "bad request"
+	MsgUnauthorized       = "unauthorized"
+	MsgForbidden          = "forbidden"
+	MsgNotFound           = "not found"
+	MsgConflict           = "conflict"
+	MsgTooManyRequests    = "too many requests"
+	MsgInternalError      = "internal server error"
 	MsgServiceUnavailable = "service unavailable"
 )
 
 // getRequestMeta extracts request metadata from context
 func getRequestMeta(c *gin.Context) (string, string, int64) {
 	var requestID, traceID string
-	
+
 	if id, exists := c.Get("request_id"); exists {
 		if reqID, ok := id.(string); ok {
 			requestID = reqID
 		}
 	}
-	
+
 	if id, exists := c.Get("trace_id"); exists {
 		if trcID, ok := id.(string); ok {
 			traceID = trcID
 		}
 	}
-	
+
 	return requestID, traceID, time.Now().Unix()
 }
 
@@ -111,7 +111,7 @@ func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 // Error sends an error response
 func Error(c *gin.Context, httpStatus int, code interface{}, message string) {
 	var errorCode int
-	
+
 	switch v := code.(type) {
 	case int:
 		errorCode = v

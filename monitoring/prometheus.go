@@ -296,7 +296,7 @@ func StartServer(cfg *config.MonitoringConfig, logger *slog.Logger) {
 	go collectSystemMetrics()
 
 	mux := http.NewServeMux()
-	
+
 	// Metrics endpoint
 	metricsPath := "/metrics"
 	if cfg.Path != "" {
@@ -323,7 +323,7 @@ func StartServer(cfg *config.MonitoringConfig, logger *slog.Logger) {
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	
+
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			logger.Error("Prometheus metrics server failed", "error", err)
@@ -353,26 +353,26 @@ func HTTPMetricsMiddleware() func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			
+
 			// Increment in-flight requests
 			RequestsInFlight.Inc()
 			defer RequestsInFlight.Dec()
 
 			// Wrap response writer to capture status code
 			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-			
+
 			// Serve the request
 			next.ServeHTTP(wrapped, r)
-			
+
 			// Record metrics
 			duration := time.Since(start).Seconds()
-			
+
 			HTTPRequestsTotal.WithLabelValues(
 				r.Method,
 				r.URL.Path,
 				fmt.Sprintf("%d", wrapped.statusCode),
 			).Inc()
-			
+
 			HTTPRequestDuration.WithLabelValues(
 				r.Method,
 				r.URL.Path,
@@ -398,7 +398,7 @@ func RecordDBMetrics(operation string, duration time.Duration, err error) {
 	if err != nil {
 		status = "error"
 	}
-	
+
 	DBQueryTotal.WithLabelValues(operation, status).Inc()
 	DBQueryDuration.WithLabelValues(operation).Observe(duration.Seconds())
 }
@@ -409,7 +409,7 @@ func RecordRedisMetrics(command string, duration time.Duration, err error) {
 	if err != nil {
 		status = "error"
 	}
-	
+
 	RedisCommandsTotal.WithLabelValues(command, status).Inc()
 	RedisCommandsDuration.WithLabelValues(command).Observe(duration.Seconds())
 }
@@ -420,13 +420,13 @@ func RecordMessageQueueMetrics(queue, operation string, duration time.Duration, 
 	if err != nil {
 		status = "error"
 	}
-	
+
 	if operation == "publish" {
 		MessageQueuePublishedTotal.WithLabelValues(queue, status).Inc()
 	} else if operation == "consume" {
 		MessageQueueConsumedTotal.WithLabelValues(queue, status).Inc()
 	}
-	
+
 	MessageQueueProcessingDuration.WithLabelValues(queue).Observe(duration.Seconds())
 }
 
@@ -459,13 +459,13 @@ func collectSystemMetrics() {
 		runtime.ReadMemStats(&m)
 		MemoryUsage.Set(float64(m.Alloc))
 		MemoryTotal.Set(float64(m.Sys))
-		
+
 		// Collect goroutine count
 		Goroutines.Set(float64(runtime.NumGoroutine()))
-		
+
 		// Collect GC stats
 		GCDuration.Observe(float64(m.PauseNs[(m.NumGC+255)%256]) / 1e9)
-		
+
 		time.Sleep(15 * time.Second)
 	}
 }

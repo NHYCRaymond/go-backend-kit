@@ -10,15 +10,15 @@ import (
 
 // Manager manages all middleware
 type Manager struct {
-	config   *config.MiddlewareConfig
-	redis    *redis.Client
-	logger   *slog.Logger
-	jwt      *JWTService
-	
+	config *config.MiddlewareConfig
+	redis  *redis.Client
+	logger *slog.Logger
+	jwt    *JWTService
+
 	// Middleware instances
-	auth     *AuthMiddleware
-	logger   *LoggerMiddleware
-	security *SecurityMiddleware
+	auth      *AuthMiddleware
+	loggerMW  *LoggerMiddleware
+	security  *SecurityMiddleware
 	rateLimit *RateLimitMiddleware
 }
 
@@ -36,7 +36,7 @@ func NewManager(cfg *config.MiddlewareConfig, redis *redis.Client, logger *slog.
 func (m *Manager) Initialize() {
 	// Initialize middleware instances
 	m.auth = NewAuthMiddleware(m.config.Auth, m.jwt, m.redis)
-	m.logger = NewLoggerMiddleware(m.config.Logger, m.logger)
+	m.loggerMW = NewLoggerMiddleware(m.config.Logger, m.logger)
 	m.security = NewSecurityMiddleware(m.config.Security)
 	m.rateLimit = NewRateLimitMiddleware(m.config.RateLimit, m.redis)
 }
@@ -52,7 +52,7 @@ func (m *Manager) SetupAll(router *gin.Engine) {
 	router.Use(gin.Recovery())
 
 	// Request ID middleware (should be early)
-	router.Use(RequestID())
+	router.Use(RequestIDMiddleware(nil))
 
 	// Security middleware
 	if m.config.Security.EnableCORS {
@@ -66,7 +66,7 @@ func (m *Manager) SetupAll(router *gin.Engine) {
 	}
 
 	// Logging middleware
-	router.Use(m.logger.Handler())
+	router.Use(m.loggerMW.Handler())
 
 	// Authentication middleware (applied to specific routes)
 	// This should be applied per route group, not globally
@@ -83,7 +83,7 @@ func (m *Manager) SetupBasic(router *gin.Engine) {
 	router.Use(gin.Recovery())
 
 	// Request ID middleware
-	router.Use(RequestID())
+	router.Use(RequestIDMiddleware(nil))
 
 	// Security middleware
 	if m.config.Security.EnableCORS {
@@ -97,7 +97,7 @@ func (m *Manager) SetupBasic(router *gin.Engine) {
 	}
 
 	// Logging middleware
-	router.Use(m.logger.Handler())
+	router.Use(m.loggerMW.Handler())
 }
 
 // GetAuthMiddleware returns the auth middleware handler
@@ -110,10 +110,10 @@ func (m *Manager) GetAuthMiddleware() gin.HandlerFunc {
 
 // GetLoggerMiddleware returns the logger middleware handler
 func (m *Manager) GetLoggerMiddleware() gin.HandlerFunc {
-	if m.logger == nil {
+	if m.loggerMW == nil {
 		m.Initialize()
 	}
-	return m.logger.Handler()
+	return m.loggerMW.Handler()
 }
 
 // GetSecurityMiddleware returns the security middleware handler

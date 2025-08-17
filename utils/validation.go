@@ -2,16 +2,17 @@ package utils
 
 import (
 	"fmt"
-	"net/mail"
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/NHYCRaymond/go-backend-kit/validation"
 )
 
 // ValidateEmail validates email format
 func ValidateEmail(email string) bool {
-	_, err := mail.ParseAddress(email)
-	return err == nil
+	// Use more strict validation from validation package
+	return validation.IsValidEmail(email)
 }
 
 // ValidatePassword validates password strength
@@ -84,7 +85,7 @@ func ValidateUsername(username string) error {
 func ValidatePhoneNumber(phone string) error {
 	// Remove all non-digit characters
 	phone = regexp.MustCompile(`\D`).ReplaceAllString(phone, "")
-	
+
 	if len(phone) < 10 {
 		return fmt.Errorf("phone number must be at least 10 digits long")
 	}

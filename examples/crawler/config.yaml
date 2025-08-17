@@ -1,0 +1,341 @@
+# Crawler configuration file
+# This file demonstrates how to configure the crawler system
+
+# Basic crawler information
+id: "production-crawler"
+name: "Production Web Crawler"
+version: "1.0.0"
+mode: "distributed"  # standalone, distributed, or cluster
+
+# Worker configuration
+workers: 20
+max_concurrent: 100
+max_depth: 5
+max_retries: 3
+timeout: "30s"
+
+# Redis configuration
+redis:
+  address: "localhost:6379"
+  db: 0
+  prefix: "crawler:prod"
+  password: ""
+
+# Fetcher configuration
+fetcher:
+  timeout: "30s"
+  max_retries: 3
+  retry_wait_time: "2s"
+  rate_limit: 10  # requests per second
+  
+  # User agents pool
+  user_agents:
+    - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+    - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+  
+  # Proxy configuration
+  proxy_pool:
+    enabled: true
+    strategy: "round_robin"  # round_robin, random, or least_used
+    check_interval: "5m"
+    proxies:
+      - url: "http://proxy1.example.com:8080"
+        username: "user1"
+        password: "pass1"
+      - url: "http://proxy2.example.com:8080"
+        username: "user2"
+        password: "pass2"
+  
+  # Cache configuration
+  cache:
+    enabled: true
+    ttl: "1h"
+    max_size: 104857600  # 100MB
+    
+  # Headers to send with every request
+  default_headers:
+    Accept: "text/html,application/json,application/xml"
+    Accept-Language: "en-US,en;q=0.9"
+    Accept-Encoding: "gzip, deflate"
+    Cache-Control: "no-cache"
+
+# Pipeline configuration
+pipeline:
+  concurrency: 10
+  processors:
+    - name: "cleaner"
+      enabled: true
+      config:
+        trim_space: true
+        remove_empty: true
+        normalize_space: true
+    
+    - name: "validator"
+      enabled: true
+      config:
+        rules:
+          - field: "url"
+            type: "url"
+            required: true
+          - field: "title"
+            type: "string"
+            min_length: 1
+            max_length: 200
+    
+    - name: "deduplicator"
+      enabled: true
+      config:
+        key: "url"
+        strategy: "bloom_filter"
+        capacity: 1000000
+        error_rate: 0.001
+
+# Task queue configuration
+task_queue:
+  type: "redis"  # memory, redis, or custom
+  capacity: 100000
+  priorities:
+    - name: "urgent"
+      weight: 3
+    - name: "high"
+      weight: 2
+    - name: "normal"
+      weight: 1
+    - name: "low"
+      weight: 0
+
+# Dispatcher configuration
+dispatcher:
+  strategy: "least_load"  # round_robin, least_load, random, hash, or sticky
+  batch_size: 100
+  max_retries: 3
+  retry_interval: "5s"
+  timeout: "5m"
+
+# Scheduler configuration (for periodic tasks)
+scheduler:
+  enabled: true
+  jobs:
+    - name: "daily_crawl"
+      schedule: "0 0 * * *"  # Daily at midnight
+      task_template: "news-crawler"
+      
+    - name: "hourly_update"
+      schedule: "0 * * * *"  # Every hour
+      task_template: "price-monitor"
+
+# Storage configuration
+storage:
+  type: "mongodb"  # memory, redis, mongodb, mysql, or elasticsearch
+  endpoint: "mongodb://localhost:27017"
+  database: "crawler_data"
+  collection_prefix: "crawled_"
+  
+  # Storage rules for different data types
+  rules:
+    - type: "product"
+      collection: "products"
+      ttl: "30d"
+      indexes:
+        - field: "url"
+          unique: true
+        - field: "updated_at"
+    
+    - type: "news"
+      collection: "news"
+      ttl: "7d"
+      indexes:
+        - field: "url"
+          unique: true
+        - field: "publish_date"
+
+# Monitoring and metrics
+monitoring:
+  enabled: true
+  metrics_interval: "30s"
+  export:
+    prometheus:
+      enabled: true
+      port: 9090
+      path: "/metrics"
+    
+    statsd:
+      enabled: false
+      host: "localhost:8125"
+      prefix: "crawler"
+
+# Logging configuration
+logging:
+  level: "info"  # debug, info, warn, error
+  output: "stdout"  # stdout, file, or both
+  file:
+    path: "/var/log/crawler/crawler.log"
+    max_size: 100  # MB
+    max_backups: 10
+    max_age: 30  # days
+    compress: true
+
+# Node configuration (for distributed mode)
+node:
+  id: "node-001"
+  hostname: "crawler-node-1.example.com"
+  port: 8080
+  max_workers: 50
+  queue_size: 5000
+  
+  # Node capabilities
+  capabilities:
+    - "html"
+    - "json"
+    - "browser"  # For JavaScript rendering
+  
+  # Node tags for task routing
+  tags:
+    - "production"
+    - "high-performance"
+    - "us-west-1"
+
+# Task definitions
+task_definitions:
+  - id: "product-crawler"
+    name: "E-commerce Product Crawler"
+    type: "detail"
+    priority: "normal"
+    method: "GET"
+    timeout: "15s"
+    max_retries: 3
+    retry_interval: "2s"
+    
+    extract_rules:
+      - field: "title"
+        selector: "h1.product-title"
+        type: "css"
+        required: true
+      
+      - field: "price"
+        selector: ".price-now"
+        type: "css"
+        transform:
+          - type: "regex"
+            pattern: "[0-9,.]+"
+          - type: "to_float"
+      
+      - field: "images"
+        selector: ".product-image img"
+        type: "css"
+        attribute: "src"
+        multiple: true
+      
+      - field: "description"
+        selector: ".product-description"
+        type: "css"
+        transform:
+          - type: "trim"
+          - type: "clean_html"
+    
+    link_rules:
+      - name: "related_products"
+        selector: ".related-products a"
+        type: "css"
+        attribute: "href"
+        pattern: "/product/.*"
+        task_type: "detail"
+        priority: "low"
+        depth: 2
+  
+  - id: "api-crawler"
+    name: "REST API Crawler"
+    type: "api"
+    priority: "high"
+    method: "GET"
+    timeout: "10s"
+    
+    headers:
+      Authorization: "Bearer ${API_TOKEN}"
+      Accept: "application/json"
+    
+    extract_rules:
+      - field: "data"
+        selector: "$.data"
+        type: "jsonpath"
+        multiple: true
+      
+      - field: "next_page"
+        selector: "$.links.next"
+        type: "jsonpath"
+    
+    pagination:
+      type: "cursor"
+      param: "page_token"
+      selector: "$.next_page_token"
+      max_pages: 100
+
+# Task templates
+task_templates:
+  - id: "github-repo-template"
+    name: "GitHub Repository Template"
+    definition: "api-crawler"
+    url_pattern: "https://api.github.com/repos/{owner}/{repo}"
+    
+    parameters:
+      owner: "required"
+      repo: "required"
+    
+    headers:
+      Accept: "application/vnd.github.v3+json"
+    
+    schedule: "0 */6 * * *"  # Every 6 hours
+    enabled: true
+
+# Security configuration
+security:
+  # Request signing
+  sign_requests: false
+  secret_key: "${CRAWLER_SECRET_KEY}"
+  
+  # Rate limiting per domain
+  rate_limits:
+    default: 10  # requests per second
+    domains:
+      "api.github.com": 30
+      "example.com": 5
+  
+  # Robots.txt compliance
+  respect_robots_txt: true
+  robots_cache_ttl: "24h"
+  
+  # URL filtering
+  url_filters:
+    blacklist:
+      - ".*\\.exe$"
+      - ".*\\.zip$"
+      - ".*\\.pdf$"
+    whitelist:
+      - "^https?://.*\\.example\\.com/.*"
+
+# Features toggle
+features:
+  enable_scheduler: true
+  enable_distributed: true
+  enable_metrics: true
+  enable_profiling: false
+  enable_browser_mode: false  # For JavaScript rendering
+  enable_deduplication: true
+  enable_auto_retry: true
+  enable_circuit_breaker: true
+
+# Performance tuning
+performance:
+  # Connection pool
+  max_idle_conns: 100
+  max_idle_conns_per_host: 10
+  idle_conn_timeout: "90s"
+  
+  # Memory limits
+  max_memory_mb: 2048
+  gc_interval: "1m"
+  
+  # Buffer sizes
+  channel_buffer_size: 1000
+  batch_size: 100

@@ -64,14 +64,21 @@ type JWTConfig struct {
 
 // LoggerConfig holds logger configurations
 type LoggerConfig struct {
-	Level            string   `mapstructure:"level"`
-	Format           string   `mapstructure:"format"`
-	Output           string   `mapstructure:"output"`
-	SkipPaths        []string `mapstructure:"skip_paths"`
-	SkipMethods      []string `mapstructure:"skip_methods"`
-	MaxBodySize      int      `mapstructure:"max_body_size"`
-	EnableBody       bool     `mapstructure:"enable_body"`
-	SensitiveHeaders []string `mapstructure:"sensitive_headers"`
+	Level            string   `mapstructure:"level"`             // Log level: debug, info, warn, error
+	Format           string   `mapstructure:"format"`            // Log format: json, text
+	Output           string   `mapstructure:"output"`            // Output: stdout, file, both
+	FilePath         string   `mapstructure:"file_path"`         // Log file path
+	MaxSize          int      `mapstructure:"max_size"`          // Max size in MB for rotation
+	MaxAge           int      `mapstructure:"max_age"`           // Max age in days
+	MaxBackups       int      `mapstructure:"max_backups"`       // Max number of backups
+	Compress         bool     `mapstructure:"compress"`          // Compress rotated files
+	EnableRotation   bool     `mapstructure:"enable_rotation"`   // Enable log rotation
+	AddSource        bool     `mapstructure:"add_source"`        // Add source code location
+	SkipPaths        []string `mapstructure:"skip_paths"`        // Paths to skip logging
+	SkipMethods      []string `mapstructure:"skip_methods"`      // Methods to skip logging
+	MaxBodySize      int      `mapstructure:"max_body_size"`     // Max body size to log
+	EnableBody       bool     `mapstructure:"enable_body"`       // Enable body logging
+	SensitiveHeaders []string `mapstructure:"sensitive_headers"` // Headers to redact
 }
 
 // AuthConfig holds auth middleware configuration
@@ -116,15 +123,55 @@ type DatabaseConfig struct {
 	Mongo MongoConfig `mapstructure:"mongo"`
 }
 
+// NodeConfig holds node configuration for distributed crawling
+type NodeConfig struct {
+	ID           string            `mapstructure:"id"`
+	MaxWorkers   int               `mapstructure:"max_workers"`
+	QueueSize    int               `mapstructure:"queue_size"`
+	Tags         []string          `mapstructure:"tags"`
+	Labels       map[string]string `mapstructure:"labels"`
+	Capabilities []string          `mapstructure:"capabilities"`
+}
+
+// StorageConfig holds storage configuration
+type StorageConfig struct {
+	Type       string                 `mapstructure:"type"`
+	Database   string                 `mapstructure:"database"`
+	Table      string                 `mapstructure:"table"`
+	Collection string                 `mapstructure:"collection"`
+	Prefix     string                 `mapstructure:"prefix"`
+	TTL        int                    `mapstructure:"ttl"`
+	Options    map[string]interface{} `mapstructure:"options"`
+}
+
+// StorageConfigs holds multiple storage configurations
+type StorageConfigs struct {
+	Primary StorageConfig `mapstructure:"primary"`
+	Cache   StorageConfig `mapstructure:"cache"`
+	Queue   StorageConfig `mapstructure:"queue"`
+}
+
+// CrawlerConfig holds crawler specific configuration
+type CrawlerConfig struct {
+	RedisPrefix string `mapstructure:"redis_prefix"`
+	EnableGRPC  bool   `mapstructure:"enable_grpc"`
+	HubAddr     string `mapstructure:"hub_addr"`
+}
+
 // Config holds the application configuration
 type Config struct {
 	Server     ServerConfig     `mapstructure:"server"`
 	Database   DatabaseConfig   `mapstructure:"database"`
 	Redis      RedisConfig      `mapstructure:"redis"`
+	Mongo      MongoConfig      `mapstructure:"mongo"`
 	RabbitMQ   RabbitMQConfig   `mapstructure:"rabbitmq"`
 	Monitoring MonitoringConfig `mapstructure:"monitoring"`
 	Middleware MiddlewareConfig `mapstructure:"middleware"`
 	JWT        JWTConfig        `mapstructure:"jwt"`
+	Logger     LoggerConfig     `mapstructure:"logger"`
+	Node       NodeConfig       `mapstructure:"node"`
+	Storage    StorageConfigs   `mapstructure:"storage"`
+	Crawler    CrawlerConfig    `mapstructure:"crawler"`
 }
 
 // Load loads configuration from file and environment variables
@@ -152,7 +199,7 @@ func Load(configPath string) (*Config, error) {
 // LoadFromEnv loads configuration from environment variables only
 func LoadFromEnv() *Config {
 	config := &Config{}
-	
+
 	// Server config
 	if host := os.Getenv("SERVER_HOST"); host != "" {
 		config.Server.Host = host

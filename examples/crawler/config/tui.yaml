@@ -1,0 +1,98 @@
+# TUI Configuration
+# Terminal User Interface for monitoring and control
+
+# Display settings
+display:
+  refresh_rate: 5s                # Auto-refresh interval
+  theme: "dark"                   # dark or light
+  show_timestamps: true
+  date_format: "2006-01-02 15:04:05"
+
+# Redis Configuration
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+  prefix: "crawler"
+
+# MongoDB Configuration (for task management)
+database:
+  mongo:
+    uri: "mongodb://localhost:27017"
+    database: "crawler"
+    timeout: 10
+
+# Views configuration
+views:
+  dashboard:
+    enabled: true
+    metrics_refresh: 5s
+    show_charts: true
+  
+  nodes:
+    enabled: true
+    auto_refresh: true
+    show_offline: false
+  
+  tasks:
+    enabled: true
+    page_size: 20
+    show_completed: true
+  
+  logs:
+    enabled: true
+    max_lines: 1000
+    follow_mode: true
+    filter_level: "info"           # debug, info, warn, error
+  
+  config:
+    enabled: true
+    editable: false
+  
+  task_manager:
+    enabled: true
+    page_size: 20
+    show_disabled: false
+
+# Keyboard shortcuts
+shortcuts:
+  quit: "F10"
+  dashboard: "F1"
+  nodes: "F2"
+  tasks: "F3"
+  logs: "F4"
+  config: "F5"
+  task_manager: "F6"
+  refresh: "r"
+  help: "h"
+  filter: "/"
+  clear_filter: "ESC"
+
+# Monitoring settings
+monitoring:
+  node_timeout: 30s               # Consider node offline after this
+  task_timeout: 300s              # Consider task failed after this
+  alert_threshold:
+    cpu_percent: 80
+    memory_percent: 90
+    queue_size: 1000
+    error_rate: 0.1
+
+# Notification settings
+notifications:
+  enabled: false
+  sound: false
+  desktop: false
+  
+# Logging configuration
+logger:
+  level: "error"                  # Only log errors for TUI
+  format: "json"
+  output: "none"                  # Disable to avoid corrupting TUI
+  file_path: "logs/tui.log"       # If output is file
+  
+# Cache settings
+cache:
+  enabled: true
+  ttl: 60s
+  max_entries: 1000

@@ -1,0 +1,326 @@
+syntax = "proto3";
+
+package crawler;
+
+option go_package = "./proto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+// gRPC服务定义
+service CrawlerNode {
+    // 双向流连接 - 节点与控制中心的主要通信通道
+    rpc Connect(stream NodeMessage) returns (stream ControlMessage);
+    
+    // 单向调用 - 用于特定操作
+    rpc GetMetrics(GetMetricsRequest) returns (MetricsResponse);
+    rpc UpdateConfig(ConfigUpdateRequest) returns (ConfigUpdateResponse);
+    rpc ExecuteCommand(CommandRequest) returns (CommandResponse);
+}
+
+// ============ 节点到控制中心的消息 ============
+
+// NodeMessage 节点发送的消息
+message NodeMessage {
+    string message_id = 1;
+    google.protobuf.Timestamp timestamp = 2;
+    
+    oneof message {
+        Heartbeat heartbeat = 10;
+        MetricsUpdate metrics_update = 11;
+        TaskStatusUpdate task_status = 12;
+        LogEntry log_entry = 13;
+        Event event = 14;
+        RegisterNode register = 15;
+        Response response = 16;
+    }
+}
+
+// Heartbeat 心跳消息
+message Heartbeat {
+    string node_id = 1;
+    NodeStatus status = 2;
+    int32 active_workers = 3;
+    int32 queue_size = 4;
+    double cpu_usage = 5;
+    double memory_usage = 6;
+}
+
+// NodeStatus 节点状态
+enum NodeStatus {
+    NODE_STATUS_UNKNOWN = 0;
+    NODE_STATUS_STARTING = 1;
+    NODE_STATUS_ACTIVE = 2;
+    NODE_STATUS_PAUSED = 3;
+    NODE_STATUS_STOPPING = 4;
+    NODE_STATUS_ERROR = 5;
+}
+
+// MetricsUpdate 指标更新
+message MetricsUpdate {
+    string node_id = 1;
+    int64 requests_total = 2;
+    int64 requests_success = 3;
+    int64 requests_failed = 4;
+    int64 bytes_downloaded = 5;
+    int64 items_extracted = 6;
+    int64 tasks_completed = 7;
+    int64 tasks_failed = 8;
+    double avg_response_time = 9;
+    double success_rate = 10;
+    map<string, double> custom_metrics = 11;
+}
+
+// TaskStatusUpdate 任务状态更新
+message TaskStatusUpdate {
+    string task_id = 1;
+    string node_id = 2;
+    TaskStatus status = 3;
+    string url = 4;
+    int32 retry_count = 5;
+    string error_message = 6;
+    int64 duration_ms = 7;
+    map<string, string> metadata = 8;
+}
+
+// TaskStatus 任务状态
+enum TaskStatus {
+    TASK_STATUS_UNKNOWN = 0;
+    TASK_STATUS_PENDING = 1;
+    TASK_STATUS_RUNNING = 2;
+    TASK_STATUS_SUCCESS = 3;
+    TASK_STATUS_FAILED = 4;
+    TASK_STATUS_RETRYING = 5;
+    TASK_STATUS_CANCELLED = 6;
+}
+
+// LogEntry 日志条目
+message LogEntry {
+    string node_id = 1;
+    LogLevel level = 2;
+    string message = 3;
+    google.protobuf.Timestamp timestamp = 4;
+    map<string, string> fields = 5;
+    string source = 6;
+}
+
+// LogLevel 日志级别
+enum LogLevel {
+    LOG_LEVEL_DEBUG = 0;
+    LOG_LEVEL_INFO = 1;
+    LOG_LEVEL_WARN = 2;
+    LOG_LEVEL_ERROR = 3;
+    LOG_LEVEL_FATAL = 4;
+}
+
+// Event 通用事件
+message Event {
+    string event_id = 1;
+    EventType type = 2;
+    string source = 3;
+    string target = 4;
+    google.protobuf.Any data = 5;
+    google.protobuf.Timestamp timestamp = 6;
+}
+
+// EventType 事件类型
+enum EventType {
+    EVENT_TYPE_UNKNOWN = 0;
+    // 节点事件
+    EVENT_NODE_ONLINE = 10;
+    EVENT_NODE_OFFLINE = 11;
+    EVENT_NODE_ERROR = 12;
+    // 任务事件
+    EVENT_TASK_START = 20;
+    EVENT_TASK_COMPLETE = 21;
+    EVENT_TASK_FAILED = 22;
+    EVENT_TASK_RETRY = 23;
+    // 系统事件
+    EVENT_RATE_LIMIT_EXCEEDED = 30;
+    EVENT_MEMORY_HIGH = 31;
+    EVENT_QUEUE_FULL = 32;
+}
+
+// RegisterNode 节点注册
+message RegisterNode {
+    string node_id = 1;
+    string hostname = 2;
+    string ip = 3;
+    int32 port = 4;
+    repeated string capabilities = 5;
+    int32 max_workers = 6;
+    map<string, string> labels = 7;
+    string version = 8;
+}
+
+// Response 响应消息（用于请求-响应模式）
+message Response {
+    string request_id = 1;
+    bool success = 2;
+    string error_message = 3;
+    google.protobuf.Any data = 4;
+}
+
+// ============ 控制中心到节点的消息 ============
+
+// ControlMessage 控制消息
+message ControlMessage {
+    string message_id = 1;
+    google.protobuf.Timestamp timestamp = 2;
+    
+    oneof message {
+        RateLimitUpdate rate_limit = 10;
+        TaskAssignment task_assignment = 11;
+        ConfigUpdate config_update = 12;
+        Command command = 13;
+        Request request = 14;
+        Acknowledgment ack = 15;
+    }
+}
+
+// RateLimitUpdate 速率限制更新
+message RateLimitUpdate {
+    int32 requests_per_second = 1;
+    int32 burst_size = 2;
+    int64 duration_seconds = 3;  // 0 表示永久
+}
+
+// TaskAssignment 任务分配
+message TaskAssignment {
+    string task_id = 1;
+    string url = 2;
+    string method = 3;
+    map<string, string> headers = 4;
+    bytes body = 5;
+    TaskPriority priority = 6;
+    int32 max_retries = 7;
+    int32 timeout_seconds = 8;
+    map<string, string> metadata = 9;
+    repeated ExtractRule extract_rules = 10;
+}
+
+// TaskPriority 任务优先级
+enum TaskPriority {
+    PRIORITY_LOW = 0;
+    PRIORITY_NORMAL = 1;
+    PRIORITY_HIGH = 2;
+    PRIORITY_URGENT = 3;
+}
+
+// ExtractRule 提取规则
+message ExtractRule {
+    string field = 1;
+    string selector = 2;
+    SelectorType type = 3;
+    string attribute = 4;
+    bool multiple = 5;
+    string default_value = 6;
+}
+
+// SelectorType 选择器类型
+enum SelectorType {
+    SELECTOR_CSS = 0;
+    SELECTOR_XPATH = 1;
+    SELECTOR_JSONPATH = 2;
+    SELECTOR_REGEX = 3;
+}
+
+// ConfigUpdate 配置更新
+message ConfigUpdate {
+    map<string, string> config = 1;
+    bool restart_required = 2;
+    repeated string affected_components = 3;
+}
+
+// Command 命令
+message Command {
+    CommandType type = 1;
+    map<string, string> parameters = 2;
+}
+
+// CommandType 命令类型
+enum CommandType {
+    CMD_UNKNOWN = 0;
+    CMD_PAUSE = 1;
+    CMD_RESUME = 2;
+    CMD_STOP = 3;
+    CMD_RESTART = 4;
+    CMD_CLEAR_QUEUE = 5;
+    CMD_RELOAD_CONFIG = 6;
+    CMD_FLUSH_CACHE = 7;
+    CMD_ROTATE_PROXY = 8;
+}
+
+// Request 请求消息（用于请求-响应模式）
+message Request {
+    string request_id = 1;
+    RequestType type = 2;
+    google.protobuf.Any data = 3;
+}
+
+// RequestType 请求类型
+enum RequestType {
+    REQUEST_GET_STATUS = 0;
+    REQUEST_GET_QUEUE_SIZE = 1;
+    REQUEST_GET_TASK_INFO = 2;
+    REQUEST_LIST_WORKERS = 3;
+}
+
+// Acknowledgment 确认消息
+message Acknowledgment {
+    string message_id = 1;
+    bool success = 2;
+    string error_message = 3;
+}
+
+// ============ 单向RPC消息 ============
+
+// GetMetricsRequest 获取指标请求
+message GetMetricsRequest {
+    string node_id = 1;
+    repeated string metric_names = 2;
+    int64 from_timestamp = 3;
+    int64 to_timestamp = 4;
+}
+
+// MetricsResponse 指标响应
+message MetricsResponse {
+    map<string, MetricValue> metrics = 1;
+}
+
+// MetricValue 指标值
+message MetricValue {
+    oneof value {
+        int64 int_value = 1;
+        double double_value = 2;
+        string string_value = 3;
+    }
+    google.protobuf.Timestamp timestamp = 4;
+}
+
+// ConfigUpdateRequest 配置更新请求
+message ConfigUpdateRequest {
+    string node_id = 1;
+    map<string, string> config = 2;
+    bool validate_only = 3;
+}
+
+// ConfigUpdateResponse 配置更新响应
+message ConfigUpdateResponse {
+    bool success = 1;
+    string error_message = 2;
+    repeated string warnings = 3;
+}
+
+// CommandRequest 命令请求
+message CommandRequest {
+    string node_id = 1;
+    Command command = 2;
+}
+
+// CommandResponse 命令响应
+message CommandResponse {
+    bool success = 1;
+    string error_message = 2;
+    google.protobuf.Any result = 3;
+}

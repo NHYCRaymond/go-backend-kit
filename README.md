@@ -1,29 +1,31 @@
 # Go Backend Kit
 
-A comprehensive Go backend infrastructure library that provides reusable components for building scalable web applications with Gin, complete with database connections, caching, messaging, monitoring, and middleware.
+A comprehensive Go backend infrastructure library that provides essential components for building scalable, secure, and maintainable web applications. This toolkit abstracts common backend concerns into well-structured, reusable modules with a focus on clean architecture, performance, and developer experience.
 
 ## 🚀 Features
 
 ### Infrastructure Components
-- **Database**: MySQL (GORM), MongoDB, Redis connection management
+- **Database**: Unified interface for MySQL (GORM), MongoDB, and Redis with connection pooling
 - **Message Queue**: RabbitMQ with connection pooling and auto-reconnection
-- **Monitoring**: Prometheus metrics integration
-- **Caching**: Redis-based caching with distributed locking
-- **Logging**: Structured logging with rotation support
+- **Monitoring**: Prometheus metrics with pre-built Grafana dashboards
+- **Distributed Lock**: Redis-based distributed locking with auto-renewal
+- **Money/Decimal**: Precise monetary calculations without floating-point errors
+- **Logging**: Structured logging with context propagation
 
 ### Middleware System
 - **Authentication**: JWT-based authentication and authorization
-- **Rate Limiting**: Configurable rate limiting with Redis backend
-- **Request Tracking**: Request ID generation and correlation
-- **Error Handling**: Centralized error handling with custom error types
-- **Security**: CORS, security headers, and request validation
-- **Logging**: Structured request/response logging
+- **Rate Limiting**: Redis-backed rate limiting with multiple strategies
+- **Request ID**: Automatic request ID generation and propagation
+- **Input Validation**: Comprehensive protection against XSS, SQL injection, and more
+- **Security Headers**: Automatic security headers (CSP, HSTS, XSS Protection)
+- **Logger**: Structured request/response logging with performance metrics
 
 ### Utilities
-- **Configuration**: YAML-based configuration with environment override
-- **Response**: Standardized API response formatting
-- **Pagination**: Database query pagination helpers
-- **Validation**: Request validation utilities
+- **Configuration**: YAML-based configuration with environment override support
+- **Response**: Standardized API response with request tracing
+- **Pagination**: Type-safe pagination for database queries
+- **Validation**: Shared validation patterns and security checks
+- **Error Handling**: Consistent error types with HTTP status mapping
 
 ## 📦 Installation
 
@@ -203,6 +205,66 @@ monitoring.HTTPRequestsTotal.WithLabelValues("GET", "/api/users", "200").Inc()
 monitoring.HTTPRequestDuration.WithLabelValues("GET", "/api/users").Observe(0.5)
 ```
 
+### Distributed Lock
+
+#### Redis-based Distributed Locking
+```go
+import "github.com/NHYCRaymond/go-backend-kit/lock"
+
+// Create distributed lock
+dl := lock.NewDistributedLock(redisClient)
+
+// Use with callback
+err := dl.WithLock(ctx, "resource-key", 30*time.Second, func(ctx context.Context) error {
+    // Critical section - only one process can execute this
+    return processResource()
+})
+
+// Use with generic return type
+result, err := lock.WithLockT(dl, ctx, "resource-key", 30*time.Second, 
+    func(ctx context.Context) (string, error) {
+        return "processed", nil
+    })
+```
+
+### Money/Decimal Handling
+
+#### Precise Monetary Calculations
+```go
+import "github.com/NHYCRaymond/go-backend-kit/decimal"
+
+// Create money values
+price := decimal.NewMoney(99.99)
+tax := price.Percentage(8.25)  // 8.25% tax
+total := price.Add(tax)
+
+// Split payment
+parts := total.Split(3)  // Split among 3 people
+
+// Database storage
+type Product struct {
+    Price decimal.Money `gorm:"type:decimal(19,4)"`
+}
+```
+
+### Input Validation Middleware
+
+#### Comprehensive Security Validation
+```go
+import "github.com/NHYCRaymond/go-backend-kit/middleware"
+
+// Use with default configuration
+router.Use(middleware.InputValidation(nil))
+
+// Or with custom configuration
+config := &middleware.ValidationConfig{
+    MaxRequestSize: 5 * 1024 * 1024, // 5MB
+    SkipPaths:      []string{"/health"},
+    AllowedFileTypes: []string{"image/jpeg", "image/png"},
+}
+router.Use(middleware.InputValidation(config))
+```
+
 ### Message Queue
 
 #### RabbitMQ
@@ -264,21 +326,28 @@ if user == nil {
 
 ## 🏗️ Architecture
 
-The library follows clean architecture principles:
+The library follows clean architecture principles with a focus on modularity and reusability:
 
 ```
 github.com/NHYCRaymond/go-backend-kit/
-├── config/          # Configuration management
-├── database/        # Database connections (MySQL, MongoDB, Redis)
+├── config/          # Configuration management with env overrides
+├── database/        # Unified database interface and implementations
+│   └── base.go      # Base structure to reduce code duplication
 ├── middleware/      # HTTP middleware components
 ├── messagequeue/    # Message queue implementations
 ├── monitoring/      # Metrics and monitoring
-├── response/        # API response utilities
+│   └── grafana/     # Pre-built Grafana dashboards
+├── response/        # Standardized API responses
 ├── errors/          # Error definitions and handling
-├── server/          # HTTP server utilities
+├── server/          # HTTP server with graceful shutdown
 ├── utils/           # Common utilities
-└── examples/        # Usage examples
+├── validation/      # Shared validation logic
+├── decimal/         # Money and decimal handling
+├── lock/            # Distributed locking
+└── examples/        # Complete example applications
 ```
+
+For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 🤝 Contributing
 

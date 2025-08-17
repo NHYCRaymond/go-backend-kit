@@ -1,0 +1,75 @@
+# Crawler Node Configuration
+
+[node]
+# Node identification (auto-generated if empty)
+id = ""
+# Node tags for task routing
+tags = ["general", "api", "browser"]
+# Node capabilities
+capabilities = ["http", "https", "javascript"]
+# Maximum concurrent workers
+max_workers = 10
+# Task queue size
+queue_size = 100
+
+[hub]
+# Hub connection settings
+addr = "localhost:50051"
+# Enable gRPC connection to hub
+enable_grpc = true
+# Reconnect settings
+reconnect_interval = "5s"
+max_reconnect_attempts = 0  # 0 = infinite
+
+[redis]
+# Redis connection settings
+addr = "localhost:6379"
+password = ""
+db = 0
+# Key prefix for all crawler-related keys
+prefix = "crawler"
+
+[crawler]
+# Crawler settings
+user_agent = "Mozilla/5.0 (compatible; CrawlerBot/1.0)"
+timeout = "30s"
+max_redirects = 5
+# Rate limiting
+requests_per_second = 10
+concurrent_requests = 5
+
+[fetcher]
+# HTTP fetcher settings
+max_retries = 3
+retry_delay = "1s"
+# Proxy settings (optional)
+proxy_url = ""
+# Custom headers
+[fetcher.headers]
+Accept = "text/html,application/json"
+Accept-Language = "en-US,en;q=0.9"
+
+[extractor]
+# Data extraction settings
+default_parser = "html"  # html, json, xml
+enable_javascript = false
+javascript_timeout = "10s"
+
+[storage]
+# Storage backend settings
+type = "redis"  # redis, mongodb, filesystem
+# Redis storage
+[storage.redis]
+ttl = "24h"
+max_items = 1000000
+
+[monitoring]
+# Node monitoring
+report_interval = "10s"
+collect_system_metrics = true
+
+[logging]
+# Logging configuration
+level = "info"  # debug, info, warn, error
+format = "json"  # json or text
+output = "stdout"  # stdout, stderr, or file path

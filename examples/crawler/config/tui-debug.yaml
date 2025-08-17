@@ -1,0 +1,17 @@
+# TUI Debug Configuration
+redis:
+  address: "localhost:6379"
+  prefix: "crawler"
+
+database:
+  mongo:
+    uri: ""  # Optional - leave empty if not using MongoDB
+
+display:
+  refresh_rate: "5s"
+
+logger:
+  level: "debug"  # Set to debug to see all logs
+  format: "text"
+  output: "file"  # Write to file to avoid corrupting TUI
+  file: "tui-debug.log"  # Debug log file

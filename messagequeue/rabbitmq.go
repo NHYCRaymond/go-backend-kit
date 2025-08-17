@@ -60,12 +60,12 @@ func (rq *RabbitMQ) connect() error {
 			rq.conn = conn
 			rq.isConnected = true
 			rq.mu.Unlock()
-			
+
 			rq.logger.Info("RabbitMQ connected successfully")
 			go rq.handleReconnect(dsn)
 			return nil
 		}
-		
+
 		rq.logger.Error("Failed to connect to RabbitMQ, retrying", "attempt", i+1, "error", err)
 		time.Sleep(5 * time.Second)
 	}
@@ -114,11 +114,11 @@ func (rq *RabbitMQ) handleReconnect(dsn string) {
 				rq.conn = conn
 				rq.isConnected = true
 				rq.mu.Unlock()
-				
+
 				rq.logger.Info("RabbitMQ reconnected successfully")
 				break
 			}
-			
+
 			rq.logger.Error("Failed to reconnect to RabbitMQ, retrying", "error", err)
 			time.Sleep(5 * time.Second)
 		}
@@ -159,7 +159,7 @@ func (rq *RabbitMQ) GetChannel(name string) (*amqp091.Channel, error) {
 // Publish publishes a message to an exchange
 func (rq *RabbitMQ) Publish(ctx context.Context, exchange, routingKey string, body []byte) error {
 	start := time.Now()
-	
+
 	ch, err := rq.GetChannel("publisher")
 	if err != nil {
 		monitoring.RecordMessageQueueMetrics("rabbitmq", "publish", time.Since(start), err)
@@ -174,7 +174,7 @@ func (rq *RabbitMQ) Publish(ctx context.Context, exchange, routingKey string, bo
 	})
 
 	monitoring.RecordMessageQueueMetrics("rabbitmq", "publish", time.Since(start), err)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
@@ -185,7 +185,7 @@ func (rq *RabbitMQ) Publish(ctx context.Context, exchange, routingKey string, bo
 // PublishWithOptions publishes a message with custom options
 func (rq *RabbitMQ) PublishWithOptions(ctx context.Context, exchange, routingKey string, body []byte, options PublishOptions) error {
 	start := time.Now()
-	
+
 	ch, err := rq.GetChannel("publisher")
 	if err != nil {
 		monitoring.RecordMessageQueueMetrics("rabbitmq", "publish", time.Since(start), err)
@@ -208,7 +208,7 @@ func (rq *RabbitMQ) PublishWithOptions(ctx context.Context, exchange, routingKey
 	err = ch.PublishWithContext(ctx, exchange, routingKey, options.Mandatory, options.Immediate, publishing)
 
 	monitoring.RecordMessageQueueMetrics("rabbitmq", "publish", time.Since(start), err)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
@@ -252,9 +252,9 @@ func (rq *RabbitMQ) Consume(ctx context.Context, queue string, handler MessageHa
 
 				start := time.Now()
 				err := handler(ctx, msg)
-				
+
 				monitoring.RecordMessageQueueMetrics(queue, "consume", time.Since(start), err)
-				
+
 				if err != nil {
 					rq.logger.Error("Message processing failed", "queue", queue, "error", err)
 					msg.Nack(false, true) // Requeue message

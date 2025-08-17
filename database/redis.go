@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/NHYCRaymond/go-backend-kit/config"
@@ -11,14 +10,9 @@ import (
 )
 
 type RedisDatabase struct {
-	client         *redis.Client
-	config         config.RedisConfig
-	connected      bool
-	connectionTime time.Duration
-	lastError      string
-	queryCount     int64
-	errorCount     int64
-	mutex          sync.RWMutex
+	BaseDatabase
+	client *redis.Client
+	config config.RedisConfig
 }
 
 func NewRedis(cfg config.RedisConfig) *RedisDatabase {
@@ -28,8 +22,6 @@ func NewRedis(cfg config.RedisConfig) *RedisDatabase {
 }
 
 func (r *RedisDatabase) Connect(ctx context.Context) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
 
 	start := time.Now()
 
@@ -45,15 +37,15 @@ func (r *RedisDatabase) Connect(ctx context.Context) error {
 	defer cancel()
 
 	if _, err := rdb.Ping(ctx).Result(); err != nil {
-		r.lastError = err.Error()
-		r.errorCount++
+		r.SetLastError(err.Error())
+		r.IncrementErrorCount()
 		return fmt.Errorf("failed to ping Redis: %w", err)
 	}
 
 	r.client = rdb
-	r.connected = true
-	r.connectionTime = time.Since(start)
-	r.lastError = ""
+	r.SetConnected(true)
+	r.SetConnectionTime(time.Since(start))
+	r.SetLastError("")
 
 	return nil
 }
@@ -67,8 +59,8 @@ func (r *RedisDatabase) Disconnect(ctx context.Context) error {
 	}
 
 	if err := r.client.Close(); err != nil {
-		r.lastError = err.Error()
-		r.errorCount++
+		r.SetLastError(err.Error())
+		r.IncrementErrorCount()
 		return err
 	}
 
@@ -106,19 +98,17 @@ func (r *RedisDatabase) Type() DatabaseType {
 }
 
 func (r *RedisDatabase) Stats() DatabaseStats {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
 
 	stats := DatabaseStats{
 		Type:           TypeRedis,
-		Connected:      r.connected,
-		ConnectionTime: r.connectionTime,
-		TotalQueries:   r.queryCount,
-		ErrorCount:     r.errorCount,
-		LastError:      r.lastError,
+		Connected:      r.IsConnected(),
+		ConnectionTime: r.GetConnectionTime(),
+		TotalQueries:   r.GetQueryCount(),
+		ErrorCount:     r.GetErrorCount(),
+		LastError:      r.GetLastError(),
 	}
 
-	if r.connected && r.client != nil {
+	if r.IsConnected() && r.client != nil {
 		// Redis doesn't provide detailed connection stats like MySQL
 		// We'll use approximate values
 		stats.MaxConnections = 1
@@ -129,19 +119,7 @@ func (r *RedisDatabase) Stats() DatabaseStats {
 	return stats
 }
 
-func (r *RedisDatabase) IncrementQueryCount() {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	r.queryCount++
-}
-
-func (r *RedisDatabase) IncrementErrorCount() {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	r.errorCount++
-}
-
-// Legacy function for backward compatibility
+// NewRedisLegacy Legacy function for backward compatibility
 func NewRedisLegacy(ctx context.Context, cfg config.RedisConfig) (*redis.Client, error) {
 	redisDB := NewRedis(cfg)
 	if err := redisDB.Connect(ctx); err != nil {

@@ -77,56 +77,56 @@ func WrapWithStatus(err error, code, message string, httpStatus int) *AppError {
 // Predefined errors
 var (
 	// Generic errors
-	ErrInternal = NewWithStatus("INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError)
-	ErrNotFound = NewWithStatus("NOT_FOUND", "Resource not found", http.StatusNotFound)
-	ErrBadRequest = NewWithStatus("BAD_REQUEST", "Bad request", http.StatusBadRequest)
-	ErrUnauthorized = NewWithStatus("UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized)
-	ErrForbidden = NewWithStatus("FORBIDDEN", "Forbidden", http.StatusForbidden)
-	ErrConflict = NewWithStatus("CONFLICT", "Resource conflict", http.StatusConflict)
-	ErrTooManyRequests = NewWithStatus("TOO_MANY_REQUESTS", "Too many requests", http.StatusTooManyRequests)
+	ErrInternal           = NewWithStatus("INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError)
+	ErrNotFound           = NewWithStatus("NOT_FOUND", "Resource not found", http.StatusNotFound)
+	ErrBadRequest         = NewWithStatus("BAD_REQUEST", "Bad request", http.StatusBadRequest)
+	ErrUnauthorized       = NewWithStatus("UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized)
+	ErrForbidden          = NewWithStatus("FORBIDDEN", "Forbidden", http.StatusForbidden)
+	ErrConflict           = NewWithStatus("CONFLICT", "Resource conflict", http.StatusConflict)
+	ErrTooManyRequests    = NewWithStatus("TOO_MANY_REQUESTS", "Too many requests", http.StatusTooManyRequests)
 	ErrServiceUnavailable = NewWithStatus("SERVICE_UNAVAILABLE", "Service unavailable", http.StatusServiceUnavailable)
 
 	// Authentication errors
-	ErrInvalidToken = NewWithStatus("INVALID_TOKEN", "Invalid authentication token", http.StatusUnauthorized)
-	ErrExpiredToken = NewWithStatus("EXPIRED_TOKEN", "Authentication token has expired", http.StatusUnauthorized)
+	ErrInvalidToken       = NewWithStatus("INVALID_TOKEN", "Invalid authentication token", http.StatusUnauthorized)
+	ErrExpiredToken       = NewWithStatus("EXPIRED_TOKEN", "Authentication token has expired", http.StatusUnauthorized)
 	ErrInvalidCredentials = NewWithStatus("INVALID_CREDENTIALS", "Invalid username or password", http.StatusUnauthorized)
-	ErrUserNotFound = NewWithStatus("USER_NOT_FOUND", "User not found", http.StatusNotFound)
-	ErrEmailExists = NewWithStatus("EMAIL_EXISTS", "Email already exists", http.StatusConflict)
-	ErrUsernameExists = NewWithStatus("USERNAME_EXISTS", "Username already exists", http.StatusConflict)
+	ErrUserNotFound       = NewWithStatus("USER_NOT_FOUND", "User not found", http.StatusNotFound)
+	ErrEmailExists        = NewWithStatus("EMAIL_EXISTS", "Email already exists", http.StatusConflict)
+	ErrUsernameExists     = NewWithStatus("USERNAME_EXISTS", "Username already exists", http.StatusConflict)
 
 	// Validation errors
 	ErrValidationFailed = NewWithStatus("VALIDATION_FAILED", "Validation failed", http.StatusBadRequest)
-	ErrMissingField = NewWithStatus("MISSING_FIELD", "Required field is missing", http.StatusBadRequest)
-	ErrInvalidFormat = NewWithStatus("INVALID_FORMAT", "Invalid format", http.StatusBadRequest)
-	ErrInvalidValue = NewWithStatus("INVALID_VALUE", "Invalid value", http.StatusBadRequest)
+	ErrMissingField     = NewWithStatus("MISSING_FIELD", "Required field is missing", http.StatusBadRequest)
+	ErrInvalidFormat    = NewWithStatus("INVALID_FORMAT", "Invalid format", http.StatusBadRequest)
+	ErrInvalidValue     = NewWithStatus("INVALID_VALUE", "Invalid value", http.StatusBadRequest)
 
 	// Database errors
-	ErrDatabaseConnection = NewWithStatus("DATABASE_CONNECTION", "Database connection failed", http.StatusServiceUnavailable)
-	ErrDatabaseQuery = NewWithStatus("DATABASE_QUERY", "Database query failed", http.StatusInternalServerError)
+	ErrDatabaseConnection  = NewWithStatus("DATABASE_CONNECTION", "Database connection failed", http.StatusServiceUnavailable)
+	ErrDatabaseQuery       = NewWithStatus("DATABASE_QUERY", "Database query failed", http.StatusInternalServerError)
 	ErrDatabaseTransaction = NewWithStatus("DATABASE_TRANSACTION", "Database transaction failed", http.StatusInternalServerError)
-	ErrRecordNotFound = NewWithStatus("RECORD_NOT_FOUND", "Record not found", http.StatusNotFound)
-	ErrDuplicateKey = NewWithStatus("DUPLICATE_KEY", "Duplicate key violation", http.StatusConflict)
+	ErrRecordNotFound      = NewWithStatus("RECORD_NOT_FOUND", "Record not found", http.StatusNotFound)
+	ErrDuplicateKey        = NewWithStatus("DUPLICATE_KEY", "Duplicate key violation", http.StatusConflict)
 
 	// Permission errors
 	ErrInsufficientPermissions = NewWithStatus("INSUFFICIENT_PERMISSIONS", "Insufficient permissions", http.StatusForbidden)
-	ErrResourceOwnership = NewWithStatus("RESOURCE_OWNERSHIP", "You don't own this resource", http.StatusForbidden)
-	ErrAdminRequired = NewWithStatus("ADMIN_REQUIRED", "Admin privileges required", http.StatusForbidden)
+	ErrResourceOwnership       = NewWithStatus("RESOURCE_OWNERSHIP", "You don't own this resource", http.StatusForbidden)
+	ErrAdminRequired           = NewWithStatus("ADMIN_REQUIRED", "Admin privileges required", http.StatusForbidden)
 
 	// Rate limiting errors
 	ErrRateLimitExceeded = NewWithStatus("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests)
 
 	// File upload errors
 	ErrFileUploadFailed = NewWithStatus("FILE_UPLOAD_FAILED", "File upload failed", http.StatusInternalServerError)
-	ErrInvalidFileType = NewWithStatus("INVALID_FILE_TYPE", "Invalid file type", http.StatusBadRequest)
-	ErrFileTooLarge = NewWithStatus("FILE_TOO_LARGE", "File too large", http.StatusBadRequest)
+	ErrInvalidFileType  = NewWithStatus("INVALID_FILE_TYPE", "Invalid file type", http.StatusBadRequest)
+	ErrFileTooLarge     = NewWithStatus("FILE_TOO_LARGE", "File too large", http.StatusBadRequest)
 
 	// External service errors
 	ErrExternalService = NewWithStatus("EXTERNAL_SERVICE", "External service error", http.StatusServiceUnavailable)
-	ErrThirdPartyAPI = NewWithStatus("THIRD_PARTY_API", "Third party API error", http.StatusServiceUnavailable)
+	ErrThirdPartyAPI   = NewWithStatus("THIRD_PARTY_API", "Third party API error", http.StatusServiceUnavailable)
 
 	// Business logic errors
-	ErrBusinessRule = NewWithStatus("BUSINESS_RULE", "Business rule violation", http.StatusBadRequest)
-	ErrInvalidState = NewWithStatus("INVALID_STATE", "Invalid state", http.StatusBadRequest)
+	ErrBusinessRule    = NewWithStatus("BUSINESS_RULE", "Business rule violation", http.StatusBadRequest)
+	ErrInvalidState    = NewWithStatus("INVALID_STATE", "Invalid state", http.StatusBadRequest)
 	ErrOperationFailed = NewWithStatus("OPERATION_FAILED", "Operation failed", http.StatusInternalServerError)
 )
 
@@ -170,8 +170,8 @@ func GetErrorMessage(err error) string {
 
 // ValidationError represents a validation error with field details
 type ValidationError struct {
-	Field   string `json:"field"`
-	Message string `json:"message"`
+	Field   string      `json:"field"`
+	Message string      `json:"message"`
 	Value   interface{} `json:"value,omitempty"`
 }
 
@@ -216,4 +216,29 @@ func NewValidationError(field, message string, value interface{}) *ValidationErr
 		Message: message,
 		Value:   value,
 	}
+}
+
+// Error codes for crawler system
+const (
+	ValidationErrorCode       = "VALIDATION_ERROR"
+	NotFoundErrorCode         = "NOT_FOUND"
+	AlreadyExistsErrorCode    = "ALREADY_EXISTS"
+	NotImplementedErrorCode   = "NOT_IMPLEMENTED"
+	ResourceExhaustedErrorCode = "RESOURCE_EXHAUSTED"
+)
+
+// IsRecoverable checks if an error is recoverable
+func IsRecoverable(err error) bool {
+	if err == nil {
+		return true
+	}
+	
+	// Check if it's an AppError
+	if appErr, ok := err.(*AppError); ok {
+		// Consider 5xx errors as recoverable
+		return appErr.HTTPStatus >= 500 && appErr.HTTPStatus < 600
+	}
+	
+	// By default, consider unknown errors as recoverable
+	return true
 }

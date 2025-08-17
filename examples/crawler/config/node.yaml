@@ -1,0 +1,155 @@
+# Node Configuration
+# Worker node for task execution
+
+# Node identity and capabilities
+node:
+  id: ""                           # Auto-generated if empty (based on hostname)
+  max_workers: 10                  # Maximum concurrent workers
+  queue_size: 100                  # Internal task queue size
+  tags:                           # Node tags for task routing
+    - general
+    - api
+    - production
+  labels:                         # Additional metadata
+    environment: "production"
+    region: "us-west"
+  capabilities:                   # Supported task types
+    - http
+    - https
+    - api
+    - browser                     # Enable if Chrome/Chromium available
+
+# Worker configuration
+workers:
+  task_timeout: 30s               # Maximum time for task execution
+  retry_delay: 5s                 # Delay between retries
+  max_retries: 3                  # Maximum retry attempts
+  concurrent_limit: 10            # Concurrent task limit
+
+# Server configuration (if needed)
+server:
+  host: "0.0.0.0"
+  port: 8081
+  env: "production"
+
+# Database Configuration
+database:
+  # MongoDB for task storage and results
+  mongo:
+    uri: "mongodb://localhost:27017"
+    database: "crawler"
+    timeout: 10
+    max_pool_size: 100
+    min_pool_size: 10
+  
+  # MySQL for structured data (optional)
+  mysql:
+    host: ""  # Leave empty to disable MySQL
+    port: 3306
+    user: "root"
+    password: ""
+    dbname: "crawler"
+    max_idle_conns: 10
+    max_open_conns: 100
+    conn_max_lifetime: 3600
+
+# Redis Configuration
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+  pool_size: 10
+  min_idle_conns: 5
+
+# Crawler specific configuration
+crawler:
+  redis_prefix: "crawler"         # Prefix for Redis keys
+  enable_grpc: true               # Enable gRPC connection to hub
+  hub_addr: "localhost:50051"     # Hub gRPC address (if enabled)
+  mode: "enhanced"                # Mode: basic or enhanced
+
+# Storage configuration for results
+storage:
+  # Primary storage for crawled data
+  primary:
+    type: "mongodb"
+    database: "crawler"
+    collection: "results"
+    ttl: 604800                  # 7 days in seconds
+  
+  # Cache storage for temporary data
+  cache:
+    type: "redis"
+    prefix: "crawler:cache"
+    ttl: 3600                     # 1 hour
+  
+  # Queue configuration
+  queue:
+    type: "redis"
+    prefix: "crawler:queue"
+
+# Fetcher configuration
+fetcher:
+  type: "http"                    # http or browser
+  timeout: 30s
+  max_redirects: 10
+  retry_count: 3
+  retry_wait: 5s
+  user_agent: "Mozilla/5.0 (compatible; CrawlerBot/1.0)"
+  headers:
+    Accept: "text/html,application/json,application/xml"
+    Accept-Language: "en-US,en;q=0.9"
+    Accept-Encoding: "gzip, deflate"
+
+# Extractor configuration
+extractor:
+  type: "css"                     # css, xpath, regex, json
+  default_timeout: 10s
+  enable_javascript: false        # For browser mode
+
+# Pipeline configuration
+pipeline:
+  enabled: true
+  processors:
+    - name: "clean"
+      enabled: true
+    - name: "validate"
+      enabled: true
+    - name: "transform"
+      enabled: true
+
+# Rate limiting
+rate_limit:
+  enabled: true
+  requests_per_second: 10
+  burst_size: 20
+  per_domain: true                # Apply rate limit per domain
+
+# Monitoring and metrics
+monitoring:
+  enabled: true
+  metrics_port: 9091
+  metrics_path: "/metrics"
+  metrics_interval: 10s
+  resource_check_interval: 5s
+  report_interval: 30s
+
+# Logging configuration
+logger:
+  level: "info"                   # debug, info, warn, error
+  format: "json"                  # json or text
+  output: "stdout"                # stdout, file, or both
+  enable_file: false
+  file_path: "logs/node.log"
+  max_size: 100                   # MB
+  max_backups: 3
+  max_age: 30                     # days
+  compress: true
+  add_source: true
+
+# Performance tuning
+performance:
+  max_goroutines: 1000
+  max_memory_mb: 512
+  gc_interval: 1m
+  buffer_size: 1024
