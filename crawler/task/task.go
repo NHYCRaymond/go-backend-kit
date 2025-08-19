@@ -93,6 +93,10 @@ type Task struct {
 	Tags     []string               `json:"tags,omitempty"`
 	Depth    int                    `json:"depth"`            // Crawl depth from seed
 	Source   string                 `json:"source,omitempty"` // Source identifier
+	
+	// Lua script support
+	ProjectID string `json:"project_id,omitempty"` // Project identifier for Lua scripts
+	LuaScript string `json:"lua_script,omitempty"` // Lua script name (not path)
 
 	// Callbacks
 	OnSuccess  string `json:"on_success,omitempty"`  // Webhook or queue for success

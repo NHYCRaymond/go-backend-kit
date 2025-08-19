@@ -6,6 +6,7 @@ import (
 	"strings"
 	
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
+	"github.com/NHYCRaymond/go-backend-kit/database"
 	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
@@ -13,9 +14,10 @@ import (
 
 // Factory creates Pipeline and Storage implementations
 type Factory struct {
-	mongodb *mongo.Database
-	mysql   *gorm.DB
-	redis   *redis.Client
+	mongodb        *mongo.Database
+	mongodbWrapper *database.MongoDatabase  // Add wrapper for storage package
+	mysql          *gorm.DB
+	redis          *redis.Client
 	
 	// Registered pipelines
 	pipelines map[string]func() task.Pipeline
@@ -51,8 +53,14 @@ func (f *Factory) registerDefaults() {
 		return &ValidationPipeline{}
 	})
 	
-	// Register storage backends
+	// Register storage backends - 简化版，只使用一个实现
 	f.RegisterStorage("mongodb", func(config task.StorageConfig) (task.Storage, error) {
+		// Check if MongoDB is available
+		if f.mongodb == nil {
+			return nil, fmt.Errorf("MongoDB not available")
+		}
+		
+		// 只使用简单的 MongoDB 存储实现
 		return NewMongoStorage(f.mongodb, config)
 	})
 	
@@ -101,6 +109,11 @@ func (f *Factory) CreateStorage(config task.StorageConfig) (task.Storage, error)
 	}
 	
 	return factory(config)
+}
+
+// SetMongoDBWrapper sets the MongoDB wrapper for storage package
+func (f *Factory) SetMongoDBWrapper(wrapper *database.MongoDatabase) {
+	f.mongodbWrapper = wrapper
 }
 
 // DefaultPipeline is the default pipeline implementation

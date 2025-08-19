@@ -26,6 +26,11 @@ type TaskDocument struct {
 	Monitoring  MonitoringConfig   `bson:"monitoring" json:"monitoring"`     // 监控配置
 	Metadata    map[string]any     `bson:"metadata" json:"metadata"`         // 元数据
 	Tags        []string           `bson:"tags" json:"tags"`                 // 标签
+	
+	// Lua脚本相关配置
+	ProjectID   string             `bson:"project_id" json:"project_id"`     // 项目ID（用于数据分组）
+	LuaScript   string             `bson:"lua_script" json:"lua_script"`     // Lua脚本名称标识（如: drip_ground_board）
+	
 	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`
 	CreatedBy   string             `bson:"created_by" json:"created_by"`
@@ -122,11 +127,22 @@ type RequestTemplate struct {
 
 // Variable 变量定义
 type Variable struct {
-	Name       string `bson:"name" json:"name"`               // 变量名
-	Type       string `bson:"type" json:"type"`               // 类型 (string, number, date, array)
-	Source     string `bson:"source" json:"source"`           // 来源 (env, context, function, static)
-	Expression string `bson:"expression" json:"expression"`   // 表达式
-	Default    any    `bson:"default" json:"default"`         // 默认值
+	Name       string         `bson:"name" json:"name"`               // 变量名
+	Type       string         `bson:"type" json:"type"`               // 类型 (string, number, date, array)
+	Source     string         `bson:"source" json:"source"`           // 来源 (env, context, function, static)
+	Expression string         `bson:"expression" json:"expression"`   // 表达式
+	Default    any            `bson:"default" json:"default"`         // 默认值
+	Strategy   *DateStrategy  `bson:"strategy,omitempty" json:"strategy,omitempty"` // 日期策略（仅当Type为date时使用）
+}
+
+// DateStrategy 日期变量策略
+type DateStrategy struct {
+	Mode       string `bson:"mode" json:"mode"`               // 模式: single(单个日期), range(日期范围), custom(自定义)
+	Format     string `bson:"format" json:"format"`           // 日期格式，如 "2006-01-02"
+	StartDays  int    `bson:"start_days" json:"start_days"`   // 起始天数偏移（相对于今天，可为负数）
+	EndDays    int    `bson:"end_days" json:"end_days"`       // 结束天数偏移（相对于今天）
+	DayStep    int    `bson:"day_step" json:"day_step"`       // 步长（默认1，表示每天）
+	CustomDays []int  `bson:"custom_days,omitempty" json:"custom_days,omitempty"` // 自定义天数偏移列表
 }
 
 // AuthConfig 认证配置

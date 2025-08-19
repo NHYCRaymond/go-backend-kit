@@ -13,7 +13,6 @@ import (
 	"github.com/NHYCRaymond/go-backend-kit/crawler/fetcher"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/pipeline"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
-	"github.com/NHYCRaymond/go-backend-kit/database"
 	"github.com/NHYCRaymond/go-backend-kit/logging"
 	"github.com/go-redis/redis/v8"
 )
@@ -86,7 +85,7 @@ type Config struct {
 	Fetcher    *fetcher.Config         `json:"fetcher"`
 	Pipeline   *pipeline.Config        `json:"pipeline"`
 	Storage    *StorageConfig          `json:"storage"`
-	TaskQueue  *task.QueueConfig       `json:"task_queue"`
+	TaskQueue  string                  `json:"task_queue"`  // "redis" or "memory"
 	Dispatcher *task.DispatcherConfig  `json:"dispatcher"`
 	Scheduler  *task.SchedulerConfig   `json:"scheduler"`
 	Node       *distributed.NodeConfig `json:"node"`
@@ -270,23 +269,15 @@ func (c *Crawler) initFetcher() error {
 		fetcher.WithConfig(fetcherConfig),
 	}
 
-	// Add proxy pool if configured
-	if fetcherConfig.ProxyPool != nil {
-		proxyPool := fetcher.NewProxyPool(fetcherConfig.ProxyPool)
-		opts = append(opts, fetcher.WithProxyPool(proxyPool))
-	}
-
 	// Add user agent pool
 	uaPool := fetcher.NewUserAgentPool(&fetcher.UserAgentPoolConfig{
 		Strategy: fetcher.UserAgentStrategyRandom,
 	})
 	opts = append(opts, fetcher.WithUserAgentPool(uaPool))
 
-	// Add rate limiter
-	if fetcherConfig.RateLimit > 0 {
-		rateLimiter := fetcher.NewDefaultRateLimiter(fetcherConfig.RateLimit)
-		opts = append(opts, fetcher.WithRateLimiter(rateLimiter))
-	}
+	// Add default rate limiter (10 requests per second)
+	rateLimiter := fetcher.NewDefaultRateLimiter(10)
+	opts = append(opts, fetcher.WithRateLimiter(rateLimiter))
 
 	// Add cache
 	if fetcherConfig.EnableCache {
@@ -308,12 +299,11 @@ func (c *Crawler) initPipeline() error {
 	}
 
 	// Create pipeline builder
-	builder := pipeline.NewBuilder().
-		WithConcurrency(pipelineConfig.Concurrency)
+	builder := pipeline.NewBuilder("crawler", c.logger)
 
 	// Add default processors
 	if pipelineConfig.EnableCleaner {
-		builder.AddProcessor(pipeline.NewCleanerProcessor(pipeline.CleanerConfig{
+		builder.Add(pipeline.NewCleanerProcessor(pipeline.CleanerConfig{
 			TrimSpace:      true,
 			RemoveEmpty:    true,
 			NormalizeSpace: true,
@@ -322,11 +312,11 @@ func (c *Crawler) initPipeline() error {
 
 	if pipelineConfig.EnableValidator {
 		// Add validation rules based on config
-		builder.AddProcessor(pipeline.NewValidatorProcessor(pipelineConfig.ValidationRules))
+		builder.Add(pipeline.NewValidatorProcessor(pipelineConfig.ValidationRules))
 	}
 
 	if pipelineConfig.EnableDeduplicator {
-		builder.AddProcessor(pipeline.NewDeduplicatorProcessor(pipelineConfig.DedupeKey))
+		builder.Add(pipeline.NewDeduplicatorProcessor(pipelineConfig.DedupeKey))
 	}
 
 	c.pipeline = builder.Build()
@@ -366,23 +356,20 @@ func (c *Crawler) initStorage() error {
 
 // initTaskQueue initializes the task queue
 func (c *Crawler) initTaskQueue() error {
-	queueConfig := c.config.TaskQueue
-	if queueConfig == nil {
-		queueConfig = &task.QueueConfig{
-			Type:     task.QueueTypeRedis,
-			Capacity: 10000,
-		}
+	queueType := c.config.TaskQueue
+	if queueType == "" {
+		queueType = "redis"  // Default to Redis queue
 	}
 
-	queue, err := task.NewQueue(queueConfig)
-	if err != nil {
-		return err
-	}
-
-	// Set Redis client for Redis queue
-	if redisQueue, ok := queue.(*task.RedisQueue); ok {
-		redisQueue.SetClient(c.redis)
-		redisQueue.SetPrefix(c.config.RedisPrefix)
+	// Create appropriate queue based on type
+	var queue task.Queue
+	switch queueType {
+	case "redis":
+		queue = task.NewRedisQueue(c.redis, c.config.RedisPrefix)
+	case "memory":
+		queue = task.NewPriorityQueue()
+	default:
+		return fmt.Errorf("unsupported queue type: %s", queueType)
 	}
 
 	c.taskQueue = queue
@@ -394,13 +381,14 @@ func (c *Crawler) initDispatcher() error {
 	dispatcherConfig := c.config.Dispatcher
 	if dispatcherConfig == nil {
 		dispatcherConfig = &task.DispatcherConfig{
-			Strategy:      task.StrategyRoundRobin,
-			MaxRetries:    c.config.MaxRetries,
-			RetryInterval: time.Second,
+			Strategy:   task.StrategyRoundRobin,
+			MaxRetries: c.config.MaxRetries,
+			Timeout:    30 * time.Second,
 		}
 	}
 
-	c.dispatcher = task.NewDispatcher(dispatcherConfig, c.logger)
+	dispatcherConfig.Logger = c.logger
+	c.dispatcher = task.NewDispatcher(dispatcherConfig)
 	return nil
 }
 
@@ -411,7 +399,7 @@ func (c *Crawler) initScheduler() error {
 		schedulerConfig = &task.SchedulerConfig{}
 	}
 
-	c.scheduler = task.NewScheduler(schedulerConfig, c.logger)
+	c.scheduler = task.NewScheduler(schedulerConfig)
 	return nil
 }
 
@@ -433,11 +421,6 @@ func (c *Crawler) initDistributed() error {
 	if err != nil {
 		return err
 	}
-
-	// Set components
-	node.SetFetcher(c.fetcher)
-	node.SetPipeline(c.pipeline)
-	node.SetStorage(c.storage)
 
 	c.node = node
 	c.registry = distributed.NewRegistry(c.redis, c.config.RedisPrefix)
@@ -703,7 +686,17 @@ func (c *Crawler) processTask(ctx context.Context, t *task.Task, workerID string
 		return
 	}
 
-	atomic.AddInt64(&c.metrics.ItemsProcessed, int64(len(processed)))
+	// Count processed items based on type
+	var processedCount int
+	switch v := processed.(type) {
+	case []interface{}:
+		processedCount = len(v)
+	case map[string]interface{}:
+		processedCount = len(v)
+	default:
+		processedCount = 1
+	}
+	atomic.AddInt64(&c.metrics.ItemsProcessed, int64(processedCount))
 
 	// Store data
 	if err := c.storeData(ctx, t, processed); err != nil {
@@ -711,10 +704,10 @@ func (c *Crawler) processTask(ctx context.Context, t *task.Task, workerID string
 		return
 	}
 
-	atomic.AddInt64(&c.metrics.ItemsStored, int64(len(processed)))
+	atomic.AddInt64(&c.metrics.ItemsStored, int64(processedCount))
 
 	// Extract new URLs and create tasks
-	if t.Type == task.TypeSeed {
+	if t.Type == string(task.TypeSeed) {
 		newTasks := c.extractTasks(ctx, t, resp, data)
 		for _, newTask := range newTasks {
 			if err := c.taskQueue.Push(ctx, newTask); err != nil {
@@ -735,8 +728,7 @@ func (c *Crawler) processTask(ctx context.Context, t *task.Task, workerID string
 
 	c.logger.Debug("Task completed",
 		"task_id", t.ID,
-		"duration", duration,
-		"items", len(processed))
+		"duration", duration)
 }
 
 // handleTaskError handles task processing errors
@@ -777,12 +769,37 @@ func (c *Crawler) extractData(ctx context.Context, t *task.Task, resp *fetcher.R
 }
 
 // storeData stores processed data
-func (c *Crawler) storeData(ctx context.Context, t *task.Task, data []interface{}) error {
-	for _, item := range data {
-		key := fmt.Sprintf("%s:%s:%d", t.ID, t.URL, time.Now().UnixNano())
-		if err := c.storage.Store(ctx, key, item); err != nil {
-			return err
+func (c *Crawler) storeData(ctx context.Context, t *task.Task, data interface{}) error {
+	// Convert data to slice if needed
+	var items []interface{}
+	switch v := data.(type) {
+	case []interface{}:
+		items = v
+	case map[string]interface{}:
+		items = []interface{}{v}
+	default:
+		items = []interface{}{data}
+	}
+	
+	// Convert items to the format expected by storage
+	dataToStore := make([]map[string]interface{}, len(items))
+	for i, item := range items {
+		dataMap, ok := item.(map[string]interface{})
+		if !ok {
+			// Wrap non-map items
+			dataMap = map[string]interface{}{
+				"data": item,
+				"task_id": t.ID,
+				"url": t.URL,
+				"timestamp": time.Now(),
+			}
 		}
+		dataToStore[i] = dataMap
+	}
+	
+	// Store all items at once
+	if err := c.storage.Save(ctx, "crawled_data", dataToStore); err != nil {
+		return err
 	}
 	return nil
 }
@@ -799,8 +816,8 @@ func (c *Crawler) extractTasks(ctx context.Context, parent *task.Task, resp *fet
 		newTask := &task.Task{
 			ID:       fmt.Sprintf("%s-child-%d", parent.ID, i),
 			URL:      fmt.Sprintf("%s/page/%d", parent.URL, i),
-			Type:     task.TypeDetail,
-			Priority: task.PriorityNormal,
+			Type:     string(task.TypeDetail),
+			Priority: int(task.PriorityNormal),
 			Depth:    parent.Depth + 1,
 			ParentID: parent.ID,
 			Metadata: parent.Metadata,
@@ -955,8 +972,8 @@ func (c *Crawler) AddSeed(url string, metadata map[string]interface{}) error {
 	t := &task.Task{
 		ID:       fmt.Sprintf("seed-%d", time.Now().UnixNano()),
 		URL:      url,
-		Type:     task.TypeSeed,
-		Priority: task.PriorityHigh,
+		Type:     string(task.TypeSeed),
+		Priority: int(task.PriorityHigh),
 		Metadata: metadata,
 		Status:   task.StatusPending,
 		Depth:    0,

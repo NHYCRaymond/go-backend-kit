@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NHYCRaymond/go-backend-kit/database"
@@ -88,6 +89,54 @@ func NewMongoStorage(db *database.MongoDatabase, config StorageConfig) (*MongoSt
 	}, nil
 }
 
+// Save implements task.Storage interface
+func (ms *MongoStorage) Save(ctx context.Context, data interface{}) error {
+	// Generate unique ID based on timestamp
+	key := fmt.Sprintf("%d", time.Now().UnixNano())
+	
+	// Log the save operation
+	fmt.Printf("📝 Saving to MongoDB - Database: %s, Collection: %s, Key: %s\n", 
+		ms.database.Name(), ms.collection.Name(), key)
+	
+	// Check MongoDB client status
+	if ms.client == nil {
+		fmt.Printf("❌ MongoDB client is nil\n")
+		return fmt.Errorf("MongoDB client is nil")
+	}
+	
+	err := ms.StoreWithTTL(ctx, key, data, ms.ttl)
+	if err != nil {
+		fmt.Printf("❌ MongoDB save failed - Error: %v\n", err)
+		return err
+	}
+	
+	fmt.Printf("✅ MongoDB save successful - Collection: %s, Key: %s\n", ms.collection.Name(), key)
+	return nil
+}
+
+// SaveBatch implements task.Storage interface
+func (ms *MongoStorage) SaveBatch(ctx context.Context, items []interface{}) error {
+	for _, item := range items {
+		if err := ms.Save(ctx, item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetType implements task.Storage interface
+func (ms *MongoStorage) GetType() string {
+	return "mongodb"
+}
+
+// Close implements task.Storage interface
+func (ms *MongoStorage) Close() error {
+	if ms.client != nil {
+		return ms.client.Disconnect(context.Background())
+	}
+	return nil
+}
+
 // Store stores data with default TTL
 func (ms *MongoStorage) Store(ctx context.Context, key string, value interface{}) error {
 	return ms.StoreWithTTL(ctx, key, value, ms.ttl)
@@ -95,6 +144,17 @@ func (ms *MongoStorage) Store(ctx context.Context, key string, value interface{}
 
 // StoreWithTTL stores data with specific TTL
 func (ms *MongoStorage) StoreWithTTL(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	// Check if client is still connected
+	if ms.client != nil {
+		pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		
+		if err := ms.client.Ping(pingCtx, nil); err != nil {
+			fmt.Printf("❌ MongoDB connection lost: %v\n", err)
+			return fmt.Errorf("MongoDB client disconnected: %w", err)
+		}
+	}
+	
 	doc := MongoDocument{
 		ID:        key,
 		Data:      value,
@@ -108,7 +168,28 @@ func (ms *MongoStorage) StoreWithTTL(ctx context.Context, key string, value inte
 	}
 	
 	opts := options.Replace().SetUpsert(true)
-	_, err := ms.collection.ReplaceOne(ctx, bson.M{"_id": key}, doc, opts)
+	result, err := ms.collection.ReplaceOne(ctx, bson.M{"_id": key}, doc, opts)
+	
+	if err != nil {
+		// Log more details about the error
+		fmt.Printf("❌ ReplaceOne failed - Collection: %s, Key: %s, Error: %v\n", 
+			ms.collection.Name(), key, err)
+		
+		// Check if it's a false positive (data might still be saved)
+		if strings.Contains(err.Error(), "client is disconnected") {
+			// Try to verify if data was actually saved
+			var checkDoc MongoDocument
+			checkErr := ms.collection.FindOne(context.Background(), bson.M{"_id": key}).Decode(&checkDoc)
+			if checkErr == nil {
+				// Data was actually saved despite the error
+				fmt.Printf("⚠️ False positive: Data was saved despite 'client disconnected' error\n")
+				return nil // Ignore the error since data was saved
+			}
+		}
+	} else if result != nil {
+		fmt.Printf("✅ ReplaceOne successful - MatchedCount: %d, ModifiedCount: %d, UpsertedCount: %d\n",
+			result.MatchedCount, result.ModifiedCount, result.UpsertedCount)
+	}
 	
 	return err
 }
@@ -249,11 +330,6 @@ func (ms *MongoStorage) Clear(ctx context.Context) error {
 	return err
 }
 
-// Close closes the storage (MongoDB connection is managed by database module)
-func (ms *MongoStorage) Close() error {
-	// Connection lifecycle is managed by database module
-	return nil
-}
 
 // HealthCheck performs health check
 func (ms *MongoStorage) HealthCheck(ctx context.Context) error {

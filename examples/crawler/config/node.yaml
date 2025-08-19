@@ -67,6 +67,20 @@ crawler:
   enable_grpc: true               # Enable gRPC connection to hub
   hub_addr: "localhost:50051"     # Hub gRPC address (if enabled)
   mode: "enhanced"                # Mode: basic or enhanced
+  
+  # Lua script configuration
+  # Script base path can be overridden by:
+  # 1. Command line: --scripts=/custom/path
+  # 2. Environment: CRAWLER_SCRIPT_BASE=/custom/path
+  # 3. This config value
+  script_base: "/Users/raymond/Projects/go-backend-kit/crawler/scripts"  # Base path for Lua scripts (absolute path)
+  
+  # Script directory structure:
+  # ${script_base}/projects/${project_id}/
+  #   ├── config.lua     # Project configuration
+  #   ├── common.lua     # Shared functions
+  #   └── parsers/       # Parser scripts
+  #       └── *.lua      # Individual parsers
 
 # Storage configuration for results
 storage:

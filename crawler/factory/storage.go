@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
@@ -26,9 +27,15 @@ type MongoStorage struct {
 
 // NewMongoStorage creates a new MongoDB storage
 func NewMongoStorage(db *mongo.Database, config task.StorageConfig) (task.Storage, error) {
+	if db == nil {
+		return nil, fmt.Errorf("MongoDB database is nil")
+	}
+	
 	if config.Collection == "" {
 		config.Collection = "crawled_data"
 	}
+	
+	fmt.Printf("🏗️ Creating MongoStorage - Database: %s, Collection: %s\n", db.Name(), config.Collection)
 	
 	return &MongoStorage{
 		db:         db,
@@ -37,6 +44,11 @@ func NewMongoStorage(db *mongo.Database, config task.StorageConfig) (task.Storag
 }
 
 func (s *MongoStorage) Save(ctx context.Context, data interface{}) error {
+	// Check if database is available
+	if s.db == nil {
+		return fmt.Errorf("MongoDB database is not connected")
+	}
+	
 	coll := s.db.Collection(s.collection)
 	
 	// Add timestamp
@@ -45,8 +57,26 @@ func (s *MongoStorage) Save(ctx context.Context, data interface{}) error {
 		"created_at": time.Now(),
 	}
 	
-	_, err := coll.InsertOne(ctx, doc)
-	return err
+	// 直接尝试保存，不要做太多检查
+	result, err := coll.InsertOne(ctx, doc)
+	if err != nil {
+		// 如果是 client disconnected 错误，尝试重新创建上下文并重试一次
+		if strings.Contains(err.Error(), "client is disconnected") {
+			// 使用新的context重试一次
+			newCtx := context.Background()
+			result, err = coll.InsertOne(newCtx, doc)
+			if err == nil {
+				fmt.Printf("✅ MongoDB save succeeded on retry - ID: %v\n", result.InsertedID)
+				return nil
+			}
+		}
+		
+		// 如果还是失败，返回错误
+		return fmt.Errorf("MongoDB save failed: %w", err)
+	}
+	
+	// 成功
+	return nil
 }
 
 func (s *MongoStorage) SaveBatch(ctx context.Context, items []interface{}) error {

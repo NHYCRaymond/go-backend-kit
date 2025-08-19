@@ -1571,6 +1571,12 @@ type TaskAssignment struct {
 	TimeoutSeconds int32                  `protobuf:"varint,8,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
 	Metadata       map[string]string      `protobuf:"bytes,9,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	ExtractRules   []*ExtractRule         `protobuf:"bytes,10,rep,name=extract_rules,json=extractRules,proto3" json:"extract_rules,omitempty"`
+	TaskType       string                 `protobuf:"bytes,11,opt,name=task_type,json=taskType,proto3" json:"task_type,omitempty"`                                                         // Task type: api, web, detail, seed, etc.
+	Cookies        map[string]string      `protobuf:"bytes,12,rep,name=cookies,proto3" json:"cookies,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Cookies for the request
+	StorageConfig  *StorageConfig         `protobuf:"bytes,13,opt,name=storage_config,json=storageConfig,proto3" json:"storage_config,omitempty"`                                          // Storage configuration
+	ParentId       string                 `protobuf:"bytes,14,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`                                                         // Parent task ID for tracking lineage
+	ProjectId      string                 `protobuf:"bytes,15,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`                                                      // Project ID for Lua script organization
+	LuaScript      string                 `protobuf:"bytes,16,opt,name=lua_script,json=luaScript,proto3" json:"lua_script,omitempty"`                                                      // Lua script name for custom parsing
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1675,6 +1681,149 @@ func (x *TaskAssignment) GetExtractRules() []*ExtractRule {
 	return nil
 }
 
+func (x *TaskAssignment) GetTaskType() string {
+	if x != nil {
+		return x.TaskType
+	}
+	return ""
+}
+
+func (x *TaskAssignment) GetCookies() map[string]string {
+	if x != nil {
+		return x.Cookies
+	}
+	return nil
+}
+
+func (x *TaskAssignment) GetStorageConfig() *StorageConfig {
+	if x != nil {
+		return x.StorageConfig
+	}
+	return nil
+}
+
+func (x *TaskAssignment) GetParentId() string {
+	if x != nil {
+		return x.ParentId
+	}
+	return ""
+}
+
+func (x *TaskAssignment) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *TaskAssignment) GetLuaScript() string {
+	if x != nil {
+		return x.LuaScript
+	}
+	return ""
+}
+
+// StorageConfig 存储配置
+type StorageConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // mongodb, mysql, redis, file, s3
+	Database      string                 `protobuf:"bytes,2,opt,name=database,proto3" json:"database,omitempty"`
+	Collection    string                 `protobuf:"bytes,3,opt,name=collection,proto3" json:"collection,omitempty"`                                                                     // For MongoDB
+	Table         string                 `protobuf:"bytes,4,opt,name=table,proto3" json:"table,omitempty"`                                                                               // For SQL databases
+	Bucket        string                 `protobuf:"bytes,5,opt,name=bucket,proto3" json:"bucket,omitempty"`                                                                             // For S3
+	Path          string                 `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`                                                                                 // For file storage
+	Format        string                 `protobuf:"bytes,7,opt,name=format,proto3" json:"format,omitempty"`                                                                             // json, csv, parquet
+	Options       map[string]string      `protobuf:"bytes,8,rep,name=options,proto3" json:"options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Additional options
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StorageConfig) Reset() {
+	*x = StorageConfig{}
+	mi := &file_crawler_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageConfig) ProtoMessage() {}
+
+func (x *StorageConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_crawler_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageConfig.ProtoReflect.Descriptor instead.
+func (*StorageConfig) Descriptor() ([]byte, []int) {
+	return file_crawler_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *StorageConfig) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *StorageConfig) GetDatabase() string {
+	if x != nil {
+		return x.Database
+	}
+	return ""
+}
+
+func (x *StorageConfig) GetCollection() string {
+	if x != nil {
+		return x.Collection
+	}
+	return ""
+}
+
+func (x *StorageConfig) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+func (x *StorageConfig) GetBucket() string {
+	if x != nil {
+		return x.Bucket
+	}
+	return ""
+}
+
+func (x *StorageConfig) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *StorageConfig) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+func (x *StorageConfig) GetOptions() map[string]string {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
 // ExtractRule 提取规则
 type ExtractRule struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1690,7 +1839,7 @@ type ExtractRule struct {
 
 func (x *ExtractRule) Reset() {
 	*x = ExtractRule{}
-	mi := &file_crawler_proto_msgTypes[11]
+	mi := &file_crawler_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1702,7 +1851,7 @@ func (x *ExtractRule) String() string {
 func (*ExtractRule) ProtoMessage() {}
 
 func (x *ExtractRule) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[11]
+	mi := &file_crawler_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1715,7 +1864,7 @@ func (x *ExtractRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExtractRule.ProtoReflect.Descriptor instead.
 func (*ExtractRule) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{11}
+	return file_crawler_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ExtractRule) GetField() string {
@@ -1772,7 +1921,7 @@ type ConfigUpdate struct {
 
 func (x *ConfigUpdate) Reset() {
 	*x = ConfigUpdate{}
-	mi := &file_crawler_proto_msgTypes[12]
+	mi := &file_crawler_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1784,7 +1933,7 @@ func (x *ConfigUpdate) String() string {
 func (*ConfigUpdate) ProtoMessage() {}
 
 func (x *ConfigUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[12]
+	mi := &file_crawler_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1797,7 +1946,7 @@ func (x *ConfigUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigUpdate.ProtoReflect.Descriptor instead.
 func (*ConfigUpdate) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{12}
+	return file_crawler_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ConfigUpdate) GetConfig() map[string]string {
@@ -1832,7 +1981,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_crawler_proto_msgTypes[13]
+	mi := &file_crawler_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1844,7 +1993,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[13]
+	mi := &file_crawler_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1857,7 +2006,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{13}
+	return file_crawler_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Command) GetType() CommandType {
@@ -1886,7 +2035,7 @@ type Request struct {
 
 func (x *Request) Reset() {
 	*x = Request{}
-	mi := &file_crawler_proto_msgTypes[14]
+	mi := &file_crawler_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1898,7 +2047,7 @@ func (x *Request) String() string {
 func (*Request) ProtoMessage() {}
 
 func (x *Request) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[14]
+	mi := &file_crawler_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1911,7 +2060,7 @@ func (x *Request) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Request.ProtoReflect.Descriptor instead.
 func (*Request) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{14}
+	return file_crawler_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Request) GetRequestId() string {
@@ -1947,7 +2096,7 @@ type Acknowledgment struct {
 
 func (x *Acknowledgment) Reset() {
 	*x = Acknowledgment{}
-	mi := &file_crawler_proto_msgTypes[15]
+	mi := &file_crawler_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1959,7 +2108,7 @@ func (x *Acknowledgment) String() string {
 func (*Acknowledgment) ProtoMessage() {}
 
 func (x *Acknowledgment) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[15]
+	mi := &file_crawler_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1972,7 +2121,7 @@ func (x *Acknowledgment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Acknowledgment.ProtoReflect.Descriptor instead.
 func (*Acknowledgment) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{15}
+	return file_crawler_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Acknowledgment) GetMessageId() string {
@@ -2009,7 +2158,7 @@ type GetMetricsRequest struct {
 
 func (x *GetMetricsRequest) Reset() {
 	*x = GetMetricsRequest{}
-	mi := &file_crawler_proto_msgTypes[16]
+	mi := &file_crawler_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2021,7 +2170,7 @@ func (x *GetMetricsRequest) String() string {
 func (*GetMetricsRequest) ProtoMessage() {}
 
 func (x *GetMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[16]
+	mi := &file_crawler_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2034,7 +2183,7 @@ func (x *GetMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMetricsRequest.ProtoReflect.Descriptor instead.
 func (*GetMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{16}
+	return file_crawler_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetMetricsRequest) GetNodeId() string {
@@ -2075,7 +2224,7 @@ type MetricsResponse struct {
 
 func (x *MetricsResponse) Reset() {
 	*x = MetricsResponse{}
-	mi := &file_crawler_proto_msgTypes[17]
+	mi := &file_crawler_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2087,7 +2236,7 @@ func (x *MetricsResponse) String() string {
 func (*MetricsResponse) ProtoMessage() {}
 
 func (x *MetricsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[17]
+	mi := &file_crawler_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2100,7 +2249,7 @@ func (x *MetricsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetricsResponse.ProtoReflect.Descriptor instead.
 func (*MetricsResponse) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{17}
+	return file_crawler_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *MetricsResponse) GetMetrics() map[string]*MetricValue {
@@ -2126,7 +2275,7 @@ type MetricValue struct {
 
 func (x *MetricValue) Reset() {
 	*x = MetricValue{}
-	mi := &file_crawler_proto_msgTypes[18]
+	mi := &file_crawler_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2138,7 +2287,7 @@ func (x *MetricValue) String() string {
 func (*MetricValue) ProtoMessage() {}
 
 func (x *MetricValue) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[18]
+	mi := &file_crawler_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2151,7 +2300,7 @@ func (x *MetricValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetricValue.ProtoReflect.Descriptor instead.
 func (*MetricValue) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{18}
+	return file_crawler_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MetricValue) GetValue() isMetricValue_Value {
@@ -2229,7 +2378,7 @@ type ConfigUpdateRequest struct {
 
 func (x *ConfigUpdateRequest) Reset() {
 	*x = ConfigUpdateRequest{}
-	mi := &file_crawler_proto_msgTypes[19]
+	mi := &file_crawler_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2241,7 +2390,7 @@ func (x *ConfigUpdateRequest) String() string {
 func (*ConfigUpdateRequest) ProtoMessage() {}
 
 func (x *ConfigUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[19]
+	mi := &file_crawler_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2254,7 +2403,7 @@ func (x *ConfigUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigUpdateRequest.ProtoReflect.Descriptor instead.
 func (*ConfigUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{19}
+	return file_crawler_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ConfigUpdateRequest) GetNodeId() string {
@@ -2290,7 +2439,7 @@ type ConfigUpdateResponse struct {
 
 func (x *ConfigUpdateResponse) Reset() {
 	*x = ConfigUpdateResponse{}
-	mi := &file_crawler_proto_msgTypes[20]
+	mi := &file_crawler_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2302,7 +2451,7 @@ func (x *ConfigUpdateResponse) String() string {
 func (*ConfigUpdateResponse) ProtoMessage() {}
 
 func (x *ConfigUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[20]
+	mi := &file_crawler_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2315,7 +2464,7 @@ func (x *ConfigUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigUpdateResponse.ProtoReflect.Descriptor instead.
 func (*ConfigUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{20}
+	return file_crawler_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ConfigUpdateResponse) GetSuccess() bool {
@@ -2350,7 +2499,7 @@ type CommandRequest struct {
 
 func (x *CommandRequest) Reset() {
 	*x = CommandRequest{}
-	mi := &file_crawler_proto_msgTypes[21]
+	mi := &file_crawler_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2362,7 +2511,7 @@ func (x *CommandRequest) String() string {
 func (*CommandRequest) ProtoMessage() {}
 
 func (x *CommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[21]
+	mi := &file_crawler_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2375,7 +2524,7 @@ func (x *CommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandRequest.ProtoReflect.Descriptor instead.
 func (*CommandRequest) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{21}
+	return file_crawler_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *CommandRequest) GetNodeId() string {
@@ -2404,7 +2553,7 @@ type CommandResponse struct {
 
 func (x *CommandResponse) Reset() {
 	*x = CommandResponse{}
-	mi := &file_crawler_proto_msgTypes[22]
+	mi := &file_crawler_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2416,7 +2565,7 @@ func (x *CommandResponse) String() string {
 func (*CommandResponse) ProtoMessage() {}
 
 func (x *CommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_crawler_proto_msgTypes[22]
+	mi := &file_crawler_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2429,7 +2578,7 @@ func (x *CommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResponse.ProtoReflect.Descriptor instead.
 func (*CommandResponse) Descriptor() ([]byte, []int) {
-	return file_crawler_proto_rawDescGZIP(), []int{22}
+	return file_crawler_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CommandResponse) GetSuccess() bool {
@@ -2563,7 +2712,7 @@ const file_crawler_proto_rawDesc = "" +
 	"\x13requests_per_second\x18\x01 \x01(\x05R\x11requestsPerSecond\x12\x1d\n" +
 	"\n" +
 	"burst_size\x18\x02 \x01(\x05R\tburstSize\x12)\n" +
-	"\x10duration_seconds\x18\x03 \x01(\x03R\x0fdurationSeconds\"\x9b\x04\n" +
+	"\x10duration_seconds\x18\x03 \x01(\x03R\x0fdurationSeconds\"\xce\x06\n" +
 	"\x0eTaskAssignment\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\x12\x16\n" +
@@ -2576,11 +2725,36 @@ const file_crawler_proto_rawDesc = "" +
 	"\x0ftimeout_seconds\x18\b \x01(\x05R\x0etimeoutSeconds\x12A\n" +
 	"\bmetadata\x18\t \x03(\v2%.crawler.TaskAssignment.MetadataEntryR\bmetadata\x129\n" +
 	"\rextract_rules\x18\n" +
-	" \x03(\v2\x14.crawler.ExtractRuleR\fextractRules\x1a:\n" +
+	" \x03(\v2\x14.crawler.ExtractRuleR\fextractRules\x12\x1b\n" +
+	"\ttask_type\x18\v \x01(\tR\btaskType\x12>\n" +
+	"\acookies\x18\f \x03(\v2$.crawler.TaskAssignment.CookiesEntryR\acookies\x12=\n" +
+	"\x0estorage_config\x18\r \x01(\v2\x16.crawler.StorageConfigR\rstorageConfig\x12\x1b\n" +
+	"\tparent_id\x18\x0e \x01(\tR\bparentId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x0f \x01(\tR\tprojectId\x12\x1d\n" +
+	"\n" +
+	"lua_script\x18\x10 \x01(\tR\tluaScript\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n" +
+	"\fCookiesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb4\x02\n" +
+	"\rStorageConfig\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12\x1a\n" +
+	"\bdatabase\x18\x02 \x01(\tR\bdatabase\x12\x1e\n" +
+	"\n" +
+	"collection\x18\x03 \x01(\tR\n" +
+	"collection\x12\x14\n" +
+	"\x05table\x18\x04 \x01(\tR\x05table\x12\x16\n" +
+	"\x06bucket\x18\x05 \x01(\tR\x06bucket\x12\x12\n" +
+	"\x04path\x18\x06 \x01(\tR\x04path\x12\x16\n" +
+	"\x06format\x18\a \x01(\tR\x06format\x12=\n" +
+	"\aoptions\x18\b \x03(\v2#.crawler.StorageConfig.OptionsEntryR\aoptions\x1a:\n" +
+	"\fOptionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc9\x01\n" +
 	"\vExtractRule\x12\x14\n" +
@@ -2716,7 +2890,7 @@ const file_crawler_proto_rawDesc = "" +
 	"\n" +
 	"GetMetrics\x12\x1a.crawler.GetMetricsRequest\x1a\x18.crawler.MetricsResponse\x12K\n" +
 	"\fUpdateConfig\x12\x1c.crawler.ConfigUpdateRequest\x1a\x1d.crawler.ConfigUpdateResponse\x12C\n" +
-	"\x0eExecuteCommand\x12\x17.crawler.CommandRequest\x1a\x18.crawler.CommandResponseB\tZ\a./protob\x06proto3"
+	"\x0eExecuteCommand\x12\x17.crawler.CommandRequest\x1a\x18.crawler.CommandResponseB5Z3github.com/NHYCRaymond/go-backend-kit/crawler/protob\x06proto3"
 
 var (
 	file_crawler_proto_rawDescOnce sync.Once
@@ -2731,7 +2905,7 @@ func file_crawler_proto_rawDescGZIP() []byte {
 }
 
 var file_crawler_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_crawler_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_crawler_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_crawler_proto_goTypes = []any{
 	(NodeStatus)(0),               // 0: crawler.NodeStatus
 	(TaskStatus)(0),               // 1: crawler.TaskStatus
@@ -2752,33 +2926,36 @@ var file_crawler_proto_goTypes = []any{
 	(*ControlMessage)(nil),        // 16: crawler.ControlMessage
 	(*RateLimitUpdate)(nil),       // 17: crawler.RateLimitUpdate
 	(*TaskAssignment)(nil),        // 18: crawler.TaskAssignment
-	(*ExtractRule)(nil),           // 19: crawler.ExtractRule
-	(*ConfigUpdate)(nil),          // 20: crawler.ConfigUpdate
-	(*Command)(nil),               // 21: crawler.Command
-	(*Request)(nil),               // 22: crawler.Request
-	(*Acknowledgment)(nil),        // 23: crawler.Acknowledgment
-	(*GetMetricsRequest)(nil),     // 24: crawler.GetMetricsRequest
-	(*MetricsResponse)(nil),       // 25: crawler.MetricsResponse
-	(*MetricValue)(nil),           // 26: crawler.MetricValue
-	(*ConfigUpdateRequest)(nil),   // 27: crawler.ConfigUpdateRequest
-	(*ConfigUpdateResponse)(nil),  // 28: crawler.ConfigUpdateResponse
-	(*CommandRequest)(nil),        // 29: crawler.CommandRequest
-	(*CommandResponse)(nil),       // 30: crawler.CommandResponse
-	nil,                           // 31: crawler.MetricsUpdate.CustomMetricsEntry
-	nil,                           // 32: crawler.TaskStatusUpdate.MetadataEntry
-	nil,                           // 33: crawler.LogEntry.FieldsEntry
-	nil,                           // 34: crawler.RegisterNode.LabelsEntry
-	nil,                           // 35: crawler.TaskAssignment.HeadersEntry
-	nil,                           // 36: crawler.TaskAssignment.MetadataEntry
-	nil,                           // 37: crawler.ConfigUpdate.ConfigEntry
-	nil,                           // 38: crawler.Command.ParametersEntry
-	nil,                           // 39: crawler.MetricsResponse.MetricsEntry
-	nil,                           // 40: crawler.ConfigUpdateRequest.ConfigEntry
-	(*timestamppb.Timestamp)(nil), // 41: google.protobuf.Timestamp
-	(*anypb.Any)(nil),             // 42: google.protobuf.Any
+	(*StorageConfig)(nil),         // 19: crawler.StorageConfig
+	(*ExtractRule)(nil),           // 20: crawler.ExtractRule
+	(*ConfigUpdate)(nil),          // 21: crawler.ConfigUpdate
+	(*Command)(nil),               // 22: crawler.Command
+	(*Request)(nil),               // 23: crawler.Request
+	(*Acknowledgment)(nil),        // 24: crawler.Acknowledgment
+	(*GetMetricsRequest)(nil),     // 25: crawler.GetMetricsRequest
+	(*MetricsResponse)(nil),       // 26: crawler.MetricsResponse
+	(*MetricValue)(nil),           // 27: crawler.MetricValue
+	(*ConfigUpdateRequest)(nil),   // 28: crawler.ConfigUpdateRequest
+	(*ConfigUpdateResponse)(nil),  // 29: crawler.ConfigUpdateResponse
+	(*CommandRequest)(nil),        // 30: crawler.CommandRequest
+	(*CommandResponse)(nil),       // 31: crawler.CommandResponse
+	nil,                           // 32: crawler.MetricsUpdate.CustomMetricsEntry
+	nil,                           // 33: crawler.TaskStatusUpdate.MetadataEntry
+	nil,                           // 34: crawler.LogEntry.FieldsEntry
+	nil,                           // 35: crawler.RegisterNode.LabelsEntry
+	nil,                           // 36: crawler.TaskAssignment.HeadersEntry
+	nil,                           // 37: crawler.TaskAssignment.MetadataEntry
+	nil,                           // 38: crawler.TaskAssignment.CookiesEntry
+	nil,                           // 39: crawler.StorageConfig.OptionsEntry
+	nil,                           // 40: crawler.ConfigUpdate.ConfigEntry
+	nil,                           // 41: crawler.Command.ParametersEntry
+	nil,                           // 42: crawler.MetricsResponse.MetricsEntry
+	nil,                           // 43: crawler.ConfigUpdateRequest.ConfigEntry
+	(*timestamppb.Timestamp)(nil), // 44: google.protobuf.Timestamp
+	(*anypb.Any)(nil),             // 45: google.protobuf.Any
 }
 var file_crawler_proto_depIdxs = []int32{
-	41, // 0: crawler.NodeMessage.timestamp:type_name -> google.protobuf.Timestamp
+	44, // 0: crawler.NodeMessage.timestamp:type_name -> google.protobuf.Timestamp
 	9,  // 1: crawler.NodeMessage.heartbeat:type_name -> crawler.Heartbeat
 	10, // 2: crawler.NodeMessage.metrics_update:type_name -> crawler.MetricsUpdate
 	11, // 3: crawler.NodeMessage.task_status:type_name -> crawler.TaskStatusUpdate
@@ -2787,53 +2964,56 @@ var file_crawler_proto_depIdxs = []int32{
 	14, // 6: crawler.NodeMessage.register:type_name -> crawler.RegisterNode
 	15, // 7: crawler.NodeMessage.response:type_name -> crawler.Response
 	0,  // 8: crawler.Heartbeat.status:type_name -> crawler.NodeStatus
-	31, // 9: crawler.MetricsUpdate.custom_metrics:type_name -> crawler.MetricsUpdate.CustomMetricsEntry
+	32, // 9: crawler.MetricsUpdate.custom_metrics:type_name -> crawler.MetricsUpdate.CustomMetricsEntry
 	1,  // 10: crawler.TaskStatusUpdate.status:type_name -> crawler.TaskStatus
-	32, // 11: crawler.TaskStatusUpdate.metadata:type_name -> crawler.TaskStatusUpdate.MetadataEntry
+	33, // 11: crawler.TaskStatusUpdate.metadata:type_name -> crawler.TaskStatusUpdate.MetadataEntry
 	2,  // 12: crawler.LogEntry.level:type_name -> crawler.LogLevel
-	41, // 13: crawler.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
-	33, // 14: crawler.LogEntry.fields:type_name -> crawler.LogEntry.FieldsEntry
+	44, // 13: crawler.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
+	34, // 14: crawler.LogEntry.fields:type_name -> crawler.LogEntry.FieldsEntry
 	3,  // 15: crawler.Event.type:type_name -> crawler.EventType
-	42, // 16: crawler.Event.data:type_name -> google.protobuf.Any
-	41, // 17: crawler.Event.timestamp:type_name -> google.protobuf.Timestamp
-	34, // 18: crawler.RegisterNode.labels:type_name -> crawler.RegisterNode.LabelsEntry
-	42, // 19: crawler.Response.data:type_name -> google.protobuf.Any
-	41, // 20: crawler.ControlMessage.timestamp:type_name -> google.protobuf.Timestamp
+	45, // 16: crawler.Event.data:type_name -> google.protobuf.Any
+	44, // 17: crawler.Event.timestamp:type_name -> google.protobuf.Timestamp
+	35, // 18: crawler.RegisterNode.labels:type_name -> crawler.RegisterNode.LabelsEntry
+	45, // 19: crawler.Response.data:type_name -> google.protobuf.Any
+	44, // 20: crawler.ControlMessage.timestamp:type_name -> google.protobuf.Timestamp
 	17, // 21: crawler.ControlMessage.rate_limit:type_name -> crawler.RateLimitUpdate
 	18, // 22: crawler.ControlMessage.task_assignment:type_name -> crawler.TaskAssignment
-	20, // 23: crawler.ControlMessage.config_update:type_name -> crawler.ConfigUpdate
-	21, // 24: crawler.ControlMessage.command:type_name -> crawler.Command
-	22, // 25: crawler.ControlMessage.request:type_name -> crawler.Request
-	23, // 26: crawler.ControlMessage.ack:type_name -> crawler.Acknowledgment
-	35, // 27: crawler.TaskAssignment.headers:type_name -> crawler.TaskAssignment.HeadersEntry
+	21, // 23: crawler.ControlMessage.config_update:type_name -> crawler.ConfigUpdate
+	22, // 24: crawler.ControlMessage.command:type_name -> crawler.Command
+	23, // 25: crawler.ControlMessage.request:type_name -> crawler.Request
+	24, // 26: crawler.ControlMessage.ack:type_name -> crawler.Acknowledgment
+	36, // 27: crawler.TaskAssignment.headers:type_name -> crawler.TaskAssignment.HeadersEntry
 	4,  // 28: crawler.TaskAssignment.priority:type_name -> crawler.TaskPriority
-	36, // 29: crawler.TaskAssignment.metadata:type_name -> crawler.TaskAssignment.MetadataEntry
-	19, // 30: crawler.TaskAssignment.extract_rules:type_name -> crawler.ExtractRule
-	5,  // 31: crawler.ExtractRule.type:type_name -> crawler.SelectorType
-	37, // 32: crawler.ConfigUpdate.config:type_name -> crawler.ConfigUpdate.ConfigEntry
-	6,  // 33: crawler.Command.type:type_name -> crawler.CommandType
-	38, // 34: crawler.Command.parameters:type_name -> crawler.Command.ParametersEntry
-	7,  // 35: crawler.Request.type:type_name -> crawler.RequestType
-	42, // 36: crawler.Request.data:type_name -> google.protobuf.Any
-	39, // 37: crawler.MetricsResponse.metrics:type_name -> crawler.MetricsResponse.MetricsEntry
-	41, // 38: crawler.MetricValue.timestamp:type_name -> google.protobuf.Timestamp
-	40, // 39: crawler.ConfigUpdateRequest.config:type_name -> crawler.ConfigUpdateRequest.ConfigEntry
-	21, // 40: crawler.CommandRequest.command:type_name -> crawler.Command
-	42, // 41: crawler.CommandResponse.result:type_name -> google.protobuf.Any
-	26, // 42: crawler.MetricsResponse.MetricsEntry.value:type_name -> crawler.MetricValue
-	8,  // 43: crawler.CrawlerNode.Connect:input_type -> crawler.NodeMessage
-	24, // 44: crawler.CrawlerNode.GetMetrics:input_type -> crawler.GetMetricsRequest
-	27, // 45: crawler.CrawlerNode.UpdateConfig:input_type -> crawler.ConfigUpdateRequest
-	29, // 46: crawler.CrawlerNode.ExecuteCommand:input_type -> crawler.CommandRequest
-	16, // 47: crawler.CrawlerNode.Connect:output_type -> crawler.ControlMessage
-	25, // 48: crawler.CrawlerNode.GetMetrics:output_type -> crawler.MetricsResponse
-	28, // 49: crawler.CrawlerNode.UpdateConfig:output_type -> crawler.ConfigUpdateResponse
-	30, // 50: crawler.CrawlerNode.ExecuteCommand:output_type -> crawler.CommandResponse
-	47, // [47:51] is the sub-list for method output_type
-	43, // [43:47] is the sub-list for method input_type
-	43, // [43:43] is the sub-list for extension type_name
-	43, // [43:43] is the sub-list for extension extendee
-	0,  // [0:43] is the sub-list for field type_name
+	37, // 29: crawler.TaskAssignment.metadata:type_name -> crawler.TaskAssignment.MetadataEntry
+	20, // 30: crawler.TaskAssignment.extract_rules:type_name -> crawler.ExtractRule
+	38, // 31: crawler.TaskAssignment.cookies:type_name -> crawler.TaskAssignment.CookiesEntry
+	19, // 32: crawler.TaskAssignment.storage_config:type_name -> crawler.StorageConfig
+	39, // 33: crawler.StorageConfig.options:type_name -> crawler.StorageConfig.OptionsEntry
+	5,  // 34: crawler.ExtractRule.type:type_name -> crawler.SelectorType
+	40, // 35: crawler.ConfigUpdate.config:type_name -> crawler.ConfigUpdate.ConfigEntry
+	6,  // 36: crawler.Command.type:type_name -> crawler.CommandType
+	41, // 37: crawler.Command.parameters:type_name -> crawler.Command.ParametersEntry
+	7,  // 38: crawler.Request.type:type_name -> crawler.RequestType
+	45, // 39: crawler.Request.data:type_name -> google.protobuf.Any
+	42, // 40: crawler.MetricsResponse.metrics:type_name -> crawler.MetricsResponse.MetricsEntry
+	44, // 41: crawler.MetricValue.timestamp:type_name -> google.protobuf.Timestamp
+	43, // 42: crawler.ConfigUpdateRequest.config:type_name -> crawler.ConfigUpdateRequest.ConfigEntry
+	22, // 43: crawler.CommandRequest.command:type_name -> crawler.Command
+	45, // 44: crawler.CommandResponse.result:type_name -> google.protobuf.Any
+	27, // 45: crawler.MetricsResponse.MetricsEntry.value:type_name -> crawler.MetricValue
+	8,  // 46: crawler.CrawlerNode.Connect:input_type -> crawler.NodeMessage
+	25, // 47: crawler.CrawlerNode.GetMetrics:input_type -> crawler.GetMetricsRequest
+	28, // 48: crawler.CrawlerNode.UpdateConfig:input_type -> crawler.ConfigUpdateRequest
+	30, // 49: crawler.CrawlerNode.ExecuteCommand:input_type -> crawler.CommandRequest
+	16, // 50: crawler.CrawlerNode.Connect:output_type -> crawler.ControlMessage
+	26, // 51: crawler.CrawlerNode.GetMetrics:output_type -> crawler.MetricsResponse
+	29, // 52: crawler.CrawlerNode.UpdateConfig:output_type -> crawler.ConfigUpdateResponse
+	31, // 53: crawler.CrawlerNode.ExecuteCommand:output_type -> crawler.CommandResponse
+	50, // [50:54] is the sub-list for method output_type
+	46, // [46:50] is the sub-list for method input_type
+	46, // [46:46] is the sub-list for extension type_name
+	46, // [46:46] is the sub-list for extension extendee
+	0,  // [0:46] is the sub-list for field type_name
 }
 
 func init() { file_crawler_proto_init() }
@@ -2858,7 +3038,7 @@ func file_crawler_proto_init() {
 		(*ControlMessage_Request)(nil),
 		(*ControlMessage_Ack)(nil),
 	}
-	file_crawler_proto_msgTypes[18].OneofWrappers = []any{
+	file_crawler_proto_msgTypes[19].OneofWrappers = []any{
 		(*MetricValue_IntValue)(nil),
 		(*MetricValue_DoubleValue)(nil),
 		(*MetricValue_StringValue)(nil),
@@ -2869,7 +3049,7 @@ func file_crawler_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_crawler_proto_rawDesc), len(file_crawler_proto_rawDesc)),
 			NumEnums:      8,
-			NumMessages:   33,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

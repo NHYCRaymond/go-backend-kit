@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package crawler;
 
-option go_package = "./proto";
+option go_package = "github.com/NHYCRaymond/go-backend-kit/crawler/proto";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";
@@ -197,6 +197,24 @@ message TaskAssignment {
     int32 timeout_seconds = 8;
     map<string, string> metadata = 9;
     repeated ExtractRule extract_rules = 10;
+    string task_type = 11;  // Task type: api, web, detail, seed, etc.
+    map<string, string> cookies = 12;  // Cookies for the request
+    StorageConfig storage_config = 13;  // Storage configuration
+    string parent_id = 14;  // Parent task ID for tracking lineage
+    string project_id = 15;  // Project ID for Lua script organization
+    string lua_script = 16;  // Lua script name for custom parsing
+}
+
+// StorageConfig 存储配置
+message StorageConfig {
+    string type = 1;  // mongodb, mysql, redis, file, s3
+    string database = 2;
+    string collection = 3;  // For MongoDB
+    string table = 4;  // For SQL databases
+    string bucket = 5;  // For S3
+    string path = 6;  // For file storage
+    string format = 7;  // json, csv, parquet
+    map<string, string> options = 8;  // Additional options
 }
 
 // TaskPriority 任务优先级

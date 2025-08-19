@@ -219,15 +219,117 @@ func (s *Scheduler) submitTask(doc *task.TaskDocument) {
 		"task_name", doc.Name,
 		"task_id", doc.ID.Hex())
 
-	// Convert TaskDocument to executable Task
-	execTask := s.convertToTask(doc)
+	// Check for date variables and their strategies
+	hasDateVariable := false
+	var dateStrategy *task.DateStrategy
 	
-	s.logger.Info("Task converted",
-		"task_id", execTask.ID,
-		"url", execTask.URL,
-		"has_cookies", len(execTask.Cookies) > 0,
-		"body_preview", string(execTask.Body))
+	// Check variables for date type with strategy
+	for _, v := range doc.Request.Variables {
+		if v.Type == "date" && v.Name == "DATE" {
+			hasDateVariable = true
+			dateStrategy = v.Strategy
+			break
+		}
+	}
+	
+	// If no explicit date variable, check body for ${DATE} (backward compatibility)
+	if !hasDateVariable {
+		bodyStr := ""
+		if doc.Request.Body != nil {
+			if bodyBytes, err := json.Marshal(doc.Request.Body); err == nil {
+				bodyStr = string(bodyBytes)
+			}
+		}
+		hasDateVariable = strings.Contains(bodyStr, "${DATE}")
+	}
+	
+	if hasDateVariable {
+		s.submitTasksWithDateStrategy(doc, dateStrategy)
+	} else {
+		// No date variable, submit as single task
+		execTask := s.convertToTask(doc)
+		s.submitSingleTask(ctx, execTask, doc)
+	}
+}
 
+// submitTasksWithDateStrategy submits tasks based on date strategy
+func (s *Scheduler) submitTasksWithDateStrategy(doc *task.TaskDocument, strategy *task.DateStrategy) {
+	var dates []time.Time
+	now := time.Now()
+	
+	if strategy == nil {
+		// Default strategy: next 7 days
+		s.logger.Info("Using default date strategy (7 days)",
+			"task_name", doc.Name)
+		for i := 0; i < 7; i++ {
+			dates = append(dates, now.AddDate(0, 0, i))
+		}
+	} else {
+		switch strategy.Mode {
+		case "single":
+			// Single date based on StartDays offset
+			dates = append(dates, now.AddDate(0, 0, strategy.StartDays))
+			s.logger.Info("Using single date strategy",
+				"task_name", doc.Name,
+				"offset_days", strategy.StartDays)
+			
+		case "range":
+			// Date range from StartDays to EndDays with DayStep
+			step := strategy.DayStep
+			if step <= 0 {
+				step = 1
+			}
+			for i := strategy.StartDays; i <= strategy.EndDays; i += step {
+				dates = append(dates, now.AddDate(0, 0, i))
+			}
+			s.logger.Info("Using range date strategy",
+				"task_name", doc.Name,
+				"start_days", strategy.StartDays,
+				"end_days", strategy.EndDays,
+				"step", step)
+			
+		case "custom":
+			// Custom list of day offsets
+			for _, dayOffset := range strategy.CustomDays {
+				dates = append(dates, now.AddDate(0, 0, dayOffset))
+			}
+			s.logger.Info("Using custom date strategy",
+				"task_name", doc.Name,
+				"custom_days", strategy.CustomDays)
+			
+		default:
+			// Default to single current day
+			dates = append(dates, now)
+			s.logger.Warn("Unknown date strategy mode, using today",
+				"task_name", doc.Name,
+				"mode", strategy.Mode)
+		}
+	}
+	
+	// Submit task for each date
+	for _, date := range dates {
+		s.submitTaskForDate(doc, date)
+	}
+}
+
+// submitTaskForDate creates and submits a task for a specific date
+func (s *Scheduler) submitTaskForDate(doc *task.TaskDocument, targetDate time.Time) {
+	ctx := context.Background()
+	
+	// Convert TaskDocument to executable Task with specific date
+	execTask := s.convertToTask(doc, targetDate)
+	
+	s.logger.Info("Task converted for date",
+		"task_id", execTask.ID,
+		"date", targetDate.Format("2006-01-02"),
+		"url", execTask.URL,
+		"body_preview", string(execTask.Body))
+	
+	s.submitSingleTask(ctx, execTask, doc)
+}
+
+// submitSingleTask submits a single task to the queue
+func (s *Scheduler) submitSingleTask(ctx context.Context, execTask *task.Task, doc *task.TaskDocument) {
 	// Serialize task
 	data, err := json.Marshal(execTask)
 	if err != nil {
@@ -254,8 +356,10 @@ func (s *Scheduler) submitTask(doc *task.TaskDocument) {
 		return
 	}
 
-	// Update task status in MongoDB
-	s.updateTaskStatus(ctx, doc.ID, "submitted")
+	// Update task status in MongoDB (only for the first task)
+	if !strings.Contains(execTask.ID, "_date_") || strings.Contains(execTask.ID, "_date_0") {
+		s.updateTaskStatus(ctx, doc.ID, "submitted")
+	}
 
 	s.logger.Info("Task submitted to queue",
 		"task_id", execTask.ID,
@@ -263,21 +367,38 @@ func (s *Scheduler) submitTask(doc *task.TaskDocument) {
 		"url", doc.Request.URL)
 }
 
-// convertToTask converts TaskDocument to executable Task
-func (s *Scheduler) convertToTask(doc *task.TaskDocument) *task.Task {
-	// Generate unique task instance ID
-	instanceID := fmt.Sprintf("%s_%d", doc.ID.Hex(), time.Now().Unix())
+// convertToTask converts TaskDocument to executable Task with optional date
+func (s *Scheduler) convertToTask(doc *task.TaskDocument, options ...interface{}) *task.Task {
+	// Parse options - for now just support a target date
+	var targetDate time.Time
+	var hasDate bool
 	
-	// Debug log the request body before conversion
-	s.logger.Info("Task request body before conversion",
-		"task_name", doc.Name,
-		"body_type", fmt.Sprintf("%T", doc.Request.Body),
-		"body_value", fmt.Sprintf("%+v", doc.Request.Body))
-
+	for _, opt := range options {
+		if date, ok := opt.(time.Time); ok {
+			targetDate = date
+			hasDate = true
+			break
+		}
+	}
+	
+	// Default to current time if no date provided
+	if !hasDate {
+		targetDate = time.Now()
+	}
+	
+	// Generate unique task instance ID
+	var instanceID string
+	if hasDate {
+		// Include date in ID for date-specific tasks
+		instanceID = fmt.Sprintf("%s_date_%s_%d", doc.ID.Hex(), targetDate.Format("20060102"), time.Now().UnixNano())
+	} else {
+		// Simple ID for non-date tasks
+		instanceID = fmt.Sprintf("%s_%d", doc.ID.Hex(), time.Now().UnixNano())
+	}
+	
 	// Build URL with query parameters if present
 	url := doc.Request.URL
 	if doc.Request.QueryParams != nil && len(doc.Request.QueryParams) > 0 {
-		// Add query parameters to URL
 		params := make([]string, 0, len(doc.Request.QueryParams))
 		for key, value := range doc.Request.QueryParams {
 			params = append(params, fmt.Sprintf("%s=%v", key, value))
@@ -289,17 +410,25 @@ func (s *Scheduler) convertToTask(doc *task.TaskDocument) *task.Task {
 			}
 			url = url + separator + strings.Join(params, "&")
 		}
-		s.logger.Debug("Added query params to URL",
-			"original_url", doc.Request.URL,
-			"final_url", url,
-			"params", doc.Request.QueryParams)
 	}
-
-	// Create base task
+	
+	// Process request body with date replacement if needed
+	var body []byte
+	if doc.Request.Body != nil {
+		body = s.processRequestBody(doc.Request.Body, targetDate)
+	}
+	
+	// Generate task name
+	taskName := doc.Name
+	if hasDate {
+		taskName = fmt.Sprintf("%s_%s", doc.Name, targetDate.Format("20060102"))
+	}
+	
+	// Create the task
 	t := &task.Task{
 		ID:       instanceID,
 		ParentID: doc.ID.Hex(),
-		Name:     doc.Name,
+		Name:     taskName,
 		Type:     doc.Type,
 		Priority: doc.Config.Priority,
 
@@ -308,7 +437,7 @@ func (s *Scheduler) convertToTask(doc *task.TaskDocument) *task.Task {
 		Method:  doc.Request.Method,
 		Headers: doc.Request.Headers,
 		Cookies: doc.Request.Cookies,
-		Body:    s.convertRequestBody(doc.Request.Body),
+		Body:    body,
 
 		// Configuration
 		Timeout:    time.Duration(doc.Config.Timeout) * time.Second,
@@ -319,18 +448,28 @@ func (s *Scheduler) convertToTask(doc *task.TaskDocument) *task.Task {
 		CreatedAt: time.Now(),
 		Status:    task.StatusPending,
 
-		// Storage configuration from first target
+		// Storage configuration
 		StorageConf: s.buildStorageConfig(doc.Storage),
+		
+		// Lua script configuration
+		ProjectID: doc.ProjectID,
+		LuaScript: doc.LuaScript,
 	}
 
 	// Add extract rules from extraction config
 	if doc.Extraction.Rules != nil && len(doc.Extraction.Rules) > 0 {
 		t.ExtractRules = make([]task.ExtractRule, len(doc.Extraction.Rules))
 		for i, ext := range doc.Extraction.Rules {
+			// Use extraction type from parent, not rule type (which is data type)
+			selectorType := doc.Extraction.Type
+			if selectorType == "" {
+				selectorType = "css" // Default
+			}
+			
 			t.ExtractRules[i] = task.ExtractRule{
 				Field:     ext.Field,
-				Selector:  ext.Path,  // Path is used as selector
-				Type:      ext.Type,
+				Selector:  ext.Path,
+				Type:      selectorType,
 				Required:  ext.Required,
 				Default:   ext.Default,
 			}
@@ -475,16 +614,16 @@ func (s *Scheduler) UpdateTaskResult(ctx context.Context, taskInstanceID string,
 	}
 }
 
-// convertRequestBody converts interface{} body to []byte
-func (s *Scheduler) convertRequestBody(body interface{}) []byte {
+// processRequestBody converts interface{} body to []byte with date variable replacement
+func (s *Scheduler) processRequestBody(body interface{}, targetDate time.Time) []byte {
 	if body == nil {
 		return nil
 	}
 	
-	// Log the raw body type and value for debugging
-	s.logger.Info("convertRequestBody called",
+	// Log the raw body type for debugging
+	s.logger.Debug("processRequestBody called",
 		"body_type", fmt.Sprintf("%T", body),
-		"body_value", fmt.Sprintf("%+v", body))
+		"target_date", targetDate.Format("2006-01-02"))
 	
 	// First, handle the case where body is already serialized as JSON array of Key-Value pairs
 	// This happens when MongoDB stores it as primitive.D
@@ -503,17 +642,17 @@ func (s *Scheduler) convertRequestBody(body interface{}) []byte {
 				// Convert to normal map
 				bodyMap := make(map[string]interface{})
 				for _, kv := range kvPairs {
-					// Replace ${DATE} variable
+					// Replace ${DATE} variable with target date
 					if str, ok := kv.Value.(string); ok && str == "${DATE}" {
-						bodyMap[kv.Key] = time.Now().Format("2006-01-02")
-						s.logger.Debug("Replaced ${DATE} variable", "key", kv.Key, "value", time.Now().Format("2006-01-02"))
+						bodyMap[kv.Key] = targetDate.Format("2006-01-02")
+						s.logger.Debug("Replaced ${DATE} variable", "key", kv.Key, "value", targetDate.Format("2006-01-02"))
 					} else {
 						bodyMap[kv.Key] = kv.Value
 					}
 				}
 				// Return as JSON
 				result, _ := json.Marshal(bodyMap)
-				s.logger.Info("Converted primitive.D to map", "result", string(result))
+				s.logger.Debug("Converted primitive.D to map with date", "date", targetDate.Format("2006-01-02"))
 				return result
 			}
 		}
@@ -575,12 +714,12 @@ func (s *Scheduler) convertRequestBody(body interface{}) []byte {
 		}
 	}
 	
-	// Process variables in the map
+	// Process variables in the map with target date
 	if bodyMap != nil {
-		// Replace ${DATE} with current date
+		// Replace ${DATE} with target date
 		for key, val := range bodyMap {
 			if str, ok := val.(string); ok && str == "${DATE}" {
-				bodyMap[key] = time.Now().Format("2006-01-02")
+				bodyMap[key] = targetDate.Format("2006-01-02")
 			}
 		}
 		// Marshal the processed map to JSON
@@ -590,6 +729,7 @@ func (s *Scheduler) convertRequestBody(body interface{}) []byte {
 	
 	return nil
 }
+
 
 // buildStorageConfig builds storage config from StorageConfiguration
 func (s *Scheduler) buildStorageConfig(storage task.StorageConfiguration) task.StorageConfig {

@@ -654,6 +654,13 @@ func (v *TaskManagerView) showTaskDetail() {
 [cyan]Request:[white]
   URL:     %s
   Method:  %s
+  Headers: %s
+  Body:    %s
+  Cookies: %s
+  
+[cyan]Extraction:[white]
+  Type:    %s
+  Rules:   %d rules defined
   
 [cyan]Schedule:[white]
   Type:       %s
@@ -687,6 +694,11 @@ func (v *TaskManagerView) showTaskDetail() {
 		v.currentTask.Config.Concurrency,
 		v.currentTask.Request.URL,
 		v.currentTask.Request.Method,
+		formatHeaders(v.currentTask.Request.Headers),
+		formatBody(v.currentTask.Request.Body),
+		formatCookies(v.currentTask.Request.Cookies),
+		v.currentTask.Extraction.Type,
+		len(v.currentTask.Extraction.Rules),
 		v.currentTask.Schedule.Type,
 		v.currentTask.Schedule.Expression,
 		v.currentTask.Schedule.Timezone,
@@ -1159,6 +1171,52 @@ func calculateSuccessRate(status task.TaskStatus) float64 {
 		return 0
 	}
 	return float64(status.SuccessCount) / float64(total) * 100
+}
+
+func formatHeaders(headers map[string]string) string {
+	if len(headers) == 0 {
+		return "none"
+	}
+	var parts []string
+	for k, v := range headers {
+		parts = append(parts, fmt.Sprintf("%s: %s", k, v))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatBody(body interface{}) string {
+	if body == nil {
+		return "none"
+	}
+	
+	// Convert to JSON string for display
+	data, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Sprintf("%v", body)
+	}
+	
+	// Truncate if too long
+	bodyStr := string(data)
+	if len(bodyStr) > 200 {
+		return bodyStr[:200] + "..."
+	}
+	return bodyStr
+}
+
+func formatCookies(cookies map[string]string) string {
+	if len(cookies) == 0 {
+		return "none"
+	}
+	var parts []string
+	for k, v := range cookies {
+		// Truncate cookie value for display
+		value := v
+		if len(value) > 20 {
+			value = value[:20] + "..."
+		}
+		parts = append(parts, fmt.Sprintf("%s=%s", k, value))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // Log management methods

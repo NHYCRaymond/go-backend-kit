@@ -105,6 +105,7 @@ type Executor interface {
 type TaskResult struct {
 	TaskID    string                 `json:"task_id"`
 	Status    string                 `json:"status"`
+	Message   string                 `json:"message,omitempty"`
 	Data      map[string]interface{} `json:"data,omitempty"`
 	Links     []string               `json:"links,omitempty"`
 	Error     string                 `json:"error,omitempty"`
@@ -115,6 +116,21 @@ type TaskResult struct {
 	Duration    int64 `json:"duration"` // in milliseconds
 	BytesFetched int64 `json:"bytes_fetched"`
 	ItemsExtracted int `json:"items_extracted"`
+}
+
+// TaskScheduler defines the interface for task scheduling
+type TaskScheduler interface {
+	// AddTask adds a task to the scheduler
+	AddTask(task *Task) error
+	
+	// GetNextTask gets the next task to execute
+	GetNextTask() (*Task, error)
+	
+	// UpdateTask updates task status
+	UpdateTask(task *Task) error
+	
+	// GetStats returns scheduler statistics
+	GetStats() map[string]interface{}
 }
 
 // Writer defines the interface for writing output

@@ -198,7 +198,7 @@ func (d *Dashboard) refreshStats(ctx context.Context) {
 		return
 	}
 
-	// Display crawler-specific statistics
+	// Display cluster overview
 	fmt.Fprintln(d.statsView, "")
 	fmt.Fprintln(d.statsView, " [yellow]▶ Cluster Overview[white]")
 	fmt.Fprintf(d.statsView, "  Nodes:     [cyan]%d[white] active / %d total\n",
@@ -206,25 +206,53 @@ func (d *Dashboard) refreshStats(ctx context.Context) {
 	fmt.Fprintf(d.statsView, "  Workers:   [cyan]%d[white] active / %d total\n",
 		clusterStats.ActiveWorkers, clusterStats.TotalWorkers)
 
+	// Display real-time performance
 	fmt.Fprintln(d.statsView, "")
-	fmt.Fprintln(d.statsView, " [yellow]▶ Crawl Progress[white]")
-	fmt.Fprintf(d.statsView, "  Processed: [green]%d[white] pages\n", clusterStats.TasksProcessed)
-	fmt.Fprintf(d.statsView, "  Failed:    [red]%d[white] pages\n", clusterStats.TasksFailed)
+	fmt.Fprintln(d.statsView, " [yellow]▶ Real-Time Performance[white]")
+	fmt.Fprintf(d.statsView, "  Speed:     [cyan]%.1f[white] pages/sec\n", clusterStats.TotalPagesPerSecond)
+	fmt.Fprintf(d.statsView, "  Bandwidth: [cyan]%.2f[white] Mbps\n", clusterStats.TotalBandwidthMbps)
+	fmt.Fprintf(d.statsView, "  Data Rate: [cyan]%s[white]/sec\n", formatBytes(int64(clusterStats.TotalBytesPerSecond)))
 
-	// Calculate and display success rate
+	// Display task statistics
+	fmt.Fprintln(d.statsView, "")
+	fmt.Fprintln(d.statsView, " [yellow]▶ Task Statistics[white]")
+	fmt.Fprintf(d.statsView, "  Pending:   [yellow]%d[white]\n", clusterStats.TasksPending)
+	fmt.Fprintf(d.statsView, "  Running:   [cyan]%d[white]\n", clusterStats.TasksRunning)
+	fmt.Fprintf(d.statsView, "  Queued:    [blue]%d[white]\n", clusterStats.TasksQueued)
+	fmt.Fprintf(d.statsView, "  Retrying:  [yellow]%d[white]\n", clusterStats.TasksRetrying)
+	fmt.Fprintf(d.statsView, "  Completed: [green]%d[white]\n", clusterStats.TasksProcessed)
+	fmt.Fprintf(d.statsView, "  Failed:    [red]%d[white]\n", clusterStats.TasksFailed)
+
+	// Display success rate with color coding
 	if clusterStats.TasksProcessed > 0 {
-		successRate := float64(clusterStats.TasksProcessed-clusterStats.TasksFailed) /
-			float64(clusterStats.TasksProcessed) * 100
 		color := "green"
-		if successRate < 80 {
+		if clusterStats.SuccessRate < 80 {
 			color = "yellow"
 		}
-		if successRate < 50 {
+		if clusterStats.SuccessRate < 50 {
 			color = "red"
 		}
-		fmt.Fprintf(d.statsView, "  Success:   [%s]%.1f%%[white]\n", color, successRate)
+		fmt.Fprintf(d.statsView, "  Success:   [%s]%.1f%%[white]\n", color, clusterStats.SuccessRate)
 	}
 
+	// Display URL statistics
+	fmt.Fprintln(d.statsView, "")
+	fmt.Fprintln(d.statsView, " [yellow]▶ URL Management[white]")
+	fmt.Fprintf(d.statsView, "  Discovered:[cyan]%d[white]\n", clusterStats.URLsTotal)
+	fmt.Fprintf(d.statsView, "  Duplicates:[yellow]%d[white] (%.1f%%)\n", 
+		clusterStats.URLsDuplicated, clusterStats.DedupeRate)
+
+	// Display error breakdown
+	if clusterStats.TasksFailed > 0 {
+		fmt.Fprintln(d.statsView, "")
+		fmt.Fprintln(d.statsView, " [yellow]▶ Error Analysis[white]")
+		fmt.Fprintf(d.statsView, "  Network:   [red]%d[white]\n", clusterStats.NetworkErrors)
+		fmt.Fprintf(d.statsView, "  Parse:     [red]%d[white]\n", clusterStats.ParseErrors)
+		fmt.Fprintf(d.statsView, "  Timeout:   [red]%d[white]\n", clusterStats.TimeoutErrors)
+		fmt.Fprintf(d.statsView, "  Error Rate:[red]%.1f%%[white]\n", clusterStats.ErrorRate)
+	}
+
+	// Display resource usage
 	fmt.Fprintln(d.statsView, "")
 	fmt.Fprintln(d.statsView, " [yellow]▶ Resource Usage[white]")
 	fmt.Fprintf(d.statsView, "  CPU:       %.1f%% avg\n", clusterStats.AvgCPUUsage)
@@ -329,180 +357,180 @@ func (d *Dashboard) refreshNodes(ctx context.Context) {
 
 // refreshTasks refreshes tasks table
 func (d *Dashboard) refreshTasks(ctx context.Context) {
-	// Clear table (except header)
-	for i := d.tasksTable.GetRowCount() - 1; i > 0; i-- {
-		d.tasksTable.RemoveRow(i)
-	}
-
 	// Try to get recent task results from Redis
 	// First try to get from result keys
 	resultKeys, err := d.redis.Keys(ctx, "crawler:result:*").Result()
-	if err == nil && len(resultKeys) > 0 {
-		// Get all results first, then sort by time
-		type TaskInfo struct {
-			Time   time.Time
-			URL    string
-			Status string
-			NodeID string
-			Size   int64
-			TaskID string
-		}
-		var taskInfos []TaskInfo
-
-		for _, key := range resultKeys {
-			resultData, err := d.redis.Get(ctx, key).Result()
-			if err != nil {
-				continue
-			}
-
-			// Try to parse as TaskResult first
-			var result distributed.TaskResult
-			if err := json.Unmarshal([]byte(resultData), &result); err == nil {
-				// Check if this is a valid TaskResult with metadata
-				if result.TaskID != "" && !result.StartTime.IsZero() {
-					info := TaskInfo{
-						Time:   result.EndTime,
-						Status: result.Status,
-						NodeID: result.NodeID,
-						Size:   result.BytesRead,
-						TaskID: result.TaskID,
-					}
-					if info.Time.IsZero() {
-						info.Time = result.StartTime
-					}
-
-					// Extract URL from Data
-					if len(result.Data) > 0 {
-						// Try to get URL from the data
-						if urlVal, ok := result.Data[0]["url"]; ok {
-							info.URL = fmt.Sprintf("%v", urlVal)
-						}
-					}
-
-					taskInfos = append(taskInfos, info)
-				}
-			} else {
-				// This might be raw data from old format, skip it
-				continue
-			}
-		}
-
-		// Sort by time (newest first)
-		sort.Slice(taskInfos, func(i, j int) bool {
-			return taskInfos[i].Time.After(taskInfos[j].Time)
-		})
-
-		// Show more results (up to 50)
-		if len(taskInfos) > 50 {
-			taskInfos = taskInfos[:50]
-		}
-
-		// Display results
-		for i, info := range taskInfos {
-			row := i + 1
-
-			// Time
-			timeStr := info.Time.Format("15:04:05")
-			d.tasksTable.SetCell(row, 0, tview.NewTableCell(timeStr).
-				SetAlign(tview.AlignCenter))
-
-			// URL/Target
-			url := info.URL
-
-			// If no URL found, try to get it from MongoDB task document
-			if url == "" {
-				// Extract parent task ID from instance ID (format: objectid_timestamp)
-				parts := strings.Split(info.TaskID, "_")
-				if len(parts) >= 1 && d.mongodb != nil {
-					// Try to get task from MongoDB
-					objectID, err := primitive.ObjectIDFromHex(parts[0])
-					if err == nil {
-						var taskDoc task.TaskDocument
-						collection := d.mongodb.Collection("crawler_tasks")
-						if err := collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&taskDoc); err == nil {
-							url = taskDoc.Request.URL
-						}
-					}
-				}
-
-				// Final fallback - show task ID
-				if url == "" {
-					if len(parts) >= 2 {
-						objectID := parts[0]
-						if len(objectID) > 12 {
-							objectID = objectID[:12]
-						}
-						url = fmt.Sprintf("Task %s", objectID)
-					} else {
-						url = fmt.Sprintf("Task %s", info.TaskID)
-					}
-				}
-			}
-
-			// Truncate long URLs to fit reasonably
-			if len(url) > 70 {
-				url = url[:67] + "..."
-			}
-			d.tasksTable.SetCell(row, 1, tview.NewTableCell(url).
-				SetAlign(tview.AlignLeft))
-
-			// Status with color (shorter format)
-			statusIcon := "[green]✓[white]"
-			if info.Status == "failed" {
-				statusIcon = "[red]✗[white]"
-			} else if info.Status == "running" {
-				statusIcon = "[yellow]↻[white]"
-			}
-			d.tasksTable.SetCell(row, 2, tview.NewTableCell(statusIcon).
-				SetAlign(tview.AlignCenter))
-
-			// Node (show more of the ID)
-			nodeStr := info.NodeID
-			if len(nodeStr) > 30 {
-				nodeStr = nodeStr[:27] + "..."
-			}
-			d.tasksTable.SetCell(row, 3, tview.NewTableCell(nodeStr).
-				SetAlign(tview.AlignLeft))
-
-			// Items extracted
-			itemStr := "1"
-			d.tasksTable.SetCell(row, 4, tview.NewTableCell(itemStr).
-				SetAlign(tview.AlignRight))
-
-			// Size
-			sizeStr := formatBytes(info.Size)
-			d.tasksTable.SetCell(row, 5, tview.NewTableCell(sizeStr).
-				SetAlign(tview.AlignRight))
-
-			// Duration (calculate from task ID timestamp)
-			durationStr := "0s"
-			taskParts := strings.Split(info.TaskID, "_")
-			if len(taskParts) >= 2 {
-				if startTimestamp, err := strconv.ParseInt(taskParts[1], 10, 64); err == nil {
-					startTime := time.Unix(startTimestamp, 0)
-					duration := info.Time.Sub(startTime)
-					if duration > 0 && duration < 1*time.Hour {
-						durationStr = formatDuration(duration)
-					}
-				}
-			}
-			d.tasksTable.SetCell(row, 6, tview.NewTableCell(durationStr).
-				SetAlign(tview.AlignRight))
-
-			// Depth
-			depth := 0
-			d.tasksTable.SetCell(row, 7, tview.NewTableCell(fmt.Sprintf("%d", depth)).
-				SetAlign(tview.AlignCenter))
-		}
-
+	
+	// If error or no data, don't clear the table - keep showing old data
+	if err != nil || len(resultKeys) == 0 {
+		// Don't clear existing data if we can't get new data
 		return
 	}
+	
+	// Get all results first, then sort by time
+	type TaskInfo struct {
+		Time   time.Time
+		URL    string
+		Status string
+		NodeID string
+		Size   int64
+		TaskID string
+	}
+	var taskInfos []TaskInfo
 
-	// If no real data available, show a message
-	d.tasksTable.SetCell(1, 0, tview.NewTableCell("No recent task results available").
-		SetAlign(tview.AlignCenter).
-		SetExpansion(8).
-		SetTextColor(tview.Styles.SecondaryTextColor))
+	for _, key := range resultKeys {
+		resultData, err := d.redis.Get(ctx, key).Result()
+		if err != nil {
+			continue
+		}
+
+		// Try to parse as TaskResult first
+		var result distributed.TaskResult
+		if err := json.Unmarshal([]byte(resultData), &result); err == nil {
+			// Check if this is a valid TaskResult with metadata
+			if result.TaskID != "" && !result.StartTime.IsZero() {
+				info := TaskInfo{
+					Time:   result.EndTime,
+					Status: result.Status,
+					NodeID: result.NodeID,
+					Size:   result.BytesRead,
+					TaskID: result.TaskID,
+				}
+				if info.Time.IsZero() {
+					info.Time = result.StartTime
+				}
+
+				// Extract URL from Data
+				if len(result.Data) > 0 {
+					// Try to get URL from the data
+					if urlVal, ok := result.Data[0]["url"]; ok {
+						info.URL = fmt.Sprintf("%v", urlVal)
+					}
+				}
+
+				taskInfos = append(taskInfos, info)
+			}
+		} else {
+			// This might be raw data from old format, skip it
+			continue
+		}
+	}
+
+	// Sort by time (newest first)
+	sort.Slice(taskInfos, func(i, j int) bool {
+		return taskInfos[i].Time.After(taskInfos[j].Time)
+	})
+
+	// Show more results (up to 50)
+	if len(taskInfos) > 50 {
+		taskInfos = taskInfos[:50]
+	}
+
+	// Only clear table if we have new data to display
+	if len(taskInfos) > 0 {
+		// Clear table (except header)
+		for i := d.tasksTable.GetRowCount() - 1; i > 0; i-- {
+			d.tasksTable.RemoveRow(i)
+		}
+	}
+
+	// Display results
+	for i, info := range taskInfos {
+		row := i + 1
+
+		// Time
+		timeStr := info.Time.Format("15:04:05")
+		d.tasksTable.SetCell(row, 0, tview.NewTableCell(timeStr).
+			SetAlign(tview.AlignCenter))
+
+		// URL/Target
+		url := info.URL
+
+		// If no URL found, try to get it from MongoDB task document
+		if url == "" {
+			// Extract parent task ID from instance ID (format: objectid_timestamp)
+			parts := strings.Split(info.TaskID, "_")
+			if len(parts) >= 1 && d.mongodb != nil {
+				// Try to get task from MongoDB
+				objectID, err := primitive.ObjectIDFromHex(parts[0])
+				if err == nil {
+					var taskDoc task.TaskDocument
+					collection := d.mongodb.Collection("crawler_tasks")
+					if err := collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&taskDoc); err == nil {
+						url = taskDoc.Request.URL
+					}
+				}
+			}
+
+			// Final fallback - show task ID
+			if url == "" {
+				if len(parts) >= 2 {
+					objectID := parts[0]
+					if len(objectID) > 12 {
+						objectID = objectID[:12]
+					}
+					url = fmt.Sprintf("Task %s", objectID)
+				} else {
+					url = fmt.Sprintf("Task %s", info.TaskID)
+				}
+			}
+		}
+
+		// Truncate long URLs to fit reasonably
+		if len(url) > 70 {
+			url = url[:67] + "..."
+		}
+		d.tasksTable.SetCell(row, 1, tview.NewTableCell(url).
+			SetAlign(tview.AlignLeft))
+
+		// Status with color (shorter format)
+		statusIcon := "[green]✓[white]"
+		if info.Status == "failed" {
+			statusIcon = "[red]✗[white]"
+		} else if info.Status == "running" {
+			statusIcon = "[yellow]↻[white]"
+		}
+		d.tasksTable.SetCell(row, 2, tview.NewTableCell(statusIcon).
+			SetAlign(tview.AlignCenter))
+
+		// Node (show more of the ID)
+		nodeStr := info.NodeID
+		if len(nodeStr) > 30 {
+			nodeStr = nodeStr[:27] + "..."
+		}
+		d.tasksTable.SetCell(row, 3, tview.NewTableCell(nodeStr).
+			SetAlign(tview.AlignLeft))
+
+		// Items extracted
+		itemStr := "1"
+		d.tasksTable.SetCell(row, 4, tview.NewTableCell(itemStr).
+			SetAlign(tview.AlignRight))
+
+		// Size
+		sizeStr := formatBytes(info.Size)
+		d.tasksTable.SetCell(row, 5, tview.NewTableCell(sizeStr).
+			SetAlign(tview.AlignRight))
+
+		// Duration (calculate from task ID timestamp)
+		durationStr := "0s"
+		taskParts := strings.Split(info.TaskID, "_")
+		if len(taskParts) >= 2 {
+			if startTimestamp, err := strconv.ParseInt(taskParts[1], 10, 64); err == nil {
+				startTime := time.Unix(startTimestamp, 0)
+				duration := info.Time.Sub(startTime)
+				if duration > 0 && duration < 1*time.Hour {
+					durationStr = formatDuration(duration)
+				}
+			}
+		}
+		d.tasksTable.SetCell(row, 6, tview.NewTableCell(durationStr).
+			SetAlign(tview.AlignRight))
+
+		// Depth
+		depth := 0
+		d.tasksTable.SetCell(row, 7, tview.NewTableCell(fmt.Sprintf("%d", depth)).
+			SetAlign(tview.AlignCenter))
+	}
 }
 
 // refreshMetrics refreshes metrics view
@@ -566,6 +594,20 @@ func (d *Dashboard) refreshMetrics(ctx context.Context) {
 	fmt.Fprintln(d.metricsView, "  [cyan]R[white]  Resume All")
 }
 
+// formatBytes formats bytes in human-readable format
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
 // formatDuration formats duration for display
 func formatDuration(d time.Duration) string {
 	d = d.Round(time.Second)
@@ -584,16 +626,3 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%ds", s)
 }
 
-// formatBytes formats bytes for display
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}

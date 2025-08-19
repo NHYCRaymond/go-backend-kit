@@ -12,6 +12,7 @@ import (
 	"github.com/NHYCRaymond/go-backend-kit/logging/adapter"
 	"github.com/NHYCRaymond/go-backend-kit/logging/filters"
 	"github.com/NHYCRaymond/go-backend-kit/logging/store"
+	"github.com/go-redis/redis/v8"
 )
 
 // Example of modular logging system usage
@@ -19,14 +20,19 @@ func main() {
 	ctx := context.Background()
 
 	// 1. Setup Redis connection
-	redisClient, err := database.NewRedis(config.RedisConfig{
+	redisDB := database.NewRedis(config.RedisConfig{
 		Address:  "localhost:6379",
 		Password: "",
 		DB:       0,
 	})
-	if err != nil {
+	
+	// Connect to Redis
+	if err := redisDB.Connect(ctx); err != nil {
 		panic(err)
 	}
+	
+	// Get the actual Redis client
+	redisClient := redisDB.GetClient().(*redis.Client)
 
 	// 2. Create log store (Redis implementation)
 	logStore := store.NewRedisStore(store.RedisConfig{

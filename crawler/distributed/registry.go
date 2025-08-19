@@ -29,9 +29,33 @@ type NodeMetrics struct {
 	TasksInQueue    int           `json:"tasks_in_queue"`
 	TasksFailed     int64         `json:"tasks_failed"`
 	BytesDownloaded int64         `json:"bytes_downloaded"`
+	BytesUploaded   int64         `json:"bytes_uploaded"`
 	ItemsExtracted  int64         `json:"items_extracted"`
 	AverageLatency  time.Duration `json:"average_latency"`
 	ErrorRate       float64       `json:"error_rate"`
+	
+	// Real-time metrics
+	PagesPerSecond   float64       `json:"pages_per_second"`
+	BytesPerSecond   float64       `json:"bytes_per_second"`
+	ActiveConnections int          `json:"active_connections"`
+	QueueDepth       int           `json:"queue_depth"`
+	
+	// URL metrics
+	URLsDiscovered   int64         `json:"urls_discovered"`
+	URLsDuplicated   int64         `json:"urls_duplicated"`
+	DedupeRate       float64       `json:"dedupe_rate"`
+	
+	// Task execution metrics
+	TasksPending     int           `json:"tasks_pending"`
+	TasksRunning     int           `json:"tasks_running"`
+	TasksRetrying    int           `json:"tasks_retrying"`
+	AverageExecTime  time.Duration `json:"average_exec_time"`
+	
+	// Error breakdown
+	NetworkErrors    int64         `json:"network_errors"`
+	ParseErrors      int64         `json:"parse_errors"`
+	TimeoutErrors    int64         `json:"timeout_errors"`
+	OtherErrors      int64         `json:"other_errors"`
 }
 
 // NodeInfo contains node information for registry
@@ -444,6 +468,18 @@ func (r *Registry) GetClusterStats(ctx context.Context) (*ClusterStats, error) {
 		TasksFailed:    0,
 		AvgCPUUsage:    0,
 		AvgMemoryUsage: 0,
+		// Initialize new fields
+		TotalPagesPerSecond: 0,
+		TotalBytesPerSecond: 0,
+		TasksPending:   0,
+		TasksRunning:   0,
+		TasksQueued:    0,
+		TasksRetrying:  0,
+		URLsTotal:      0,
+		URLsDuplicated: 0,
+		NetworkErrors:  0,
+		ParseErrors:    0,
+		TimeoutErrors:  0,
 	}
 
 	for _, node := range nodes {
@@ -456,12 +492,40 @@ func (r *Registry) GetClusterStats(ctx context.Context) (*ClusterStats, error) {
 		stats.TasksFailed += node.TasksFailed
 		stats.AvgCPUUsage += node.CPUUsage
 		stats.AvgMemoryUsage += node.MemoryUsage
+		
+		// Aggregate metrics from NodeMetrics if available
+		if node.Metrics != nil {
+			stats.TotalPagesPerSecond += node.Metrics.PagesPerSecond
+			stats.TotalBytesPerSecond += node.Metrics.BytesPerSecond
+			stats.TasksPending += int64(node.Metrics.TasksPending)
+			stats.TasksRunning += int64(node.Metrics.TasksRunning)
+			stats.TasksQueued += int64(node.Metrics.TasksInQueue)
+			stats.TasksRetrying += int64(node.Metrics.TasksRetrying)
+			stats.URLsTotal += node.Metrics.URLsDiscovered
+			stats.URLsDuplicated += node.Metrics.URLsDuplicated
+			stats.NetworkErrors += node.Metrics.NetworkErrors
+			stats.ParseErrors += node.Metrics.ParseErrors
+			stats.TimeoutErrors += node.Metrics.TimeoutErrors
+		}
 	}
 
 	if len(nodes) > 0 {
 		stats.AvgCPUUsage /= float64(len(nodes))
 		stats.AvgMemoryUsage /= float64(len(nodes))
 	}
+	
+	// Calculate derived metrics
+	if stats.TasksProcessed > 0 {
+		stats.SuccessRate = float64(stats.TasksProcessed-stats.TasksFailed) / float64(stats.TasksProcessed) * 100
+		stats.ErrorRate = float64(stats.TasksFailed) / float64(stats.TasksProcessed) * 100
+	}
+	
+	if stats.URLsTotal > 0 {
+		stats.DedupeRate = float64(stats.URLsDuplicated) / float64(stats.URLsTotal) * 100
+	}
+	
+	// Convert bytes/sec to Mbps
+	stats.TotalBandwidthMbps = (stats.TotalBytesPerSecond * 8) / (1024 * 1024)
 
 	return stats, nil
 }
@@ -556,4 +620,27 @@ type ClusterStats struct {
 	TasksFailed    int64   `json:"tasks_failed"`
 	AvgCPUUsage    float64 `json:"avg_cpu_usage"`
 	AvgMemoryUsage float64 `json:"avg_memory_usage"`
+	
+	// Real-time performance
+	TotalPagesPerSecond float64 `json:"total_pages_per_second"`
+	TotalBytesPerSecond float64 `json:"total_bytes_per_second"`
+	TotalBandwidthMbps  float64 `json:"total_bandwidth_mbps"`
+	
+	// Task statistics
+	TasksPending   int64   `json:"tasks_pending"`
+	TasksRunning   int64   `json:"tasks_running"`
+	TasksQueued    int64   `json:"tasks_queued"`
+	TasksRetrying  int64   `json:"tasks_retrying"`
+	SuccessRate    float64 `json:"success_rate"`
+	
+	// URL statistics
+	URLsTotal      int64   `json:"urls_total"`
+	URLsDuplicated int64   `json:"urls_duplicated"`
+	DedupeRate     float64 `json:"dedupe_rate"`
+	
+	// Error statistics
+	ErrorRate      float64 `json:"error_rate"`
+	NetworkErrors  int64   `json:"network_errors"`
+	ParseErrors    int64   `json:"parse_errors"`
+	TimeoutErrors  int64   `json:"timeout_errors"`
 }

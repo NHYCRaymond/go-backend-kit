@@ -247,16 +247,114 @@ func (nc *NodeClient) handleAck(ack *pb.Acknowledgment) {
 func (nc *NodeClient) handleTaskAssignment(assignment *pb.TaskAssignment) {
 	nc.logger.Info("Received task assignment",
 		"task_id", assignment.TaskId,
-		"url", assignment.Url)
+		"url", assignment.Url,
+		"method", assignment.Method,
+		"task_type", assignment.TaskType,
+		"project_id", assignment.ProjectId,
+		"lua_script", assignment.LuaScript,
+		"has_body", len(assignment.Body) > 0,
+		"body_size", len(assignment.Body),
+		"headers_count", len(assignment.Headers),
+		"cookies_count", len(assignment.Cookies),
+		"extract_rules_count", len(assignment.ExtractRules))
+	
+	if len(assignment.Body) > 0 {
+		nc.logger.Debug("Task body content",
+			"task_id", assignment.TaskId,
+			"body", string(assignment.Body))
+	}
 
 	// Convert to internal task
 	t := &task.Task{
-		ID:       assignment.TaskId,
-		URL:      assignment.Url,
-		Type:     string(task.TypeDetail), // Default type
-		Priority: int(assignment.Priority),
-		Headers:  assignment.Headers,
-		Metadata: make(map[string]interface{}),
+		ID:        assignment.TaskId,
+		ParentID:  assignment.ParentId,  // Include parent task ID
+		URL:       assignment.Url,
+		Type:      assignment.TaskType,  // Use task type from assignment
+		Priority:  int(assignment.Priority),
+		Method:    assignment.Method,
+		Headers:   assignment.Headers,
+		Body:      assignment.Body,
+		Cookies:   assignment.Cookies,
+		ProjectID: assignment.ProjectId,  // Include project ID for Lua scripts
+		LuaScript: assignment.LuaScript,  // Include Lua script name
+		Metadata:  make(map[string]interface{}),
+	}
+	
+	// Default task type if not specified
+	if t.Type == "" {
+		t.Type = "detail"  // Default type
+		nc.logger.Debug("Task type not specified, defaulting to detail",
+			"task_id", t.ID)
+	}
+	
+	// Convert extract rules if present
+	if len(assignment.ExtractRules) > 0 {
+		t.ExtractRules = make([]task.ExtractRule, len(assignment.ExtractRules))
+		for i, rule := range assignment.ExtractRules {
+			// Convert selector type from protobuf enum to string
+			selectorType := "css" // default
+			switch rule.Type {
+			case pb.SelectorType_SELECTOR_CSS:
+				selectorType = "css"
+			case pb.SelectorType_SELECTOR_XPATH:
+				selectorType = "xpath"
+			case pb.SelectorType_SELECTOR_JSONPATH:
+				selectorType = "json"
+			case pb.SelectorType_SELECTOR_REGEX:
+				selectorType = "regex"
+			}
+			
+			t.ExtractRules[i] = task.ExtractRule{
+				Field:     rule.Field,
+				Selector:  rule.Selector,
+				Type:      selectorType,
+				Attribute: rule.Attribute,
+				Multiple:  rule.Multiple,
+				Default:   rule.DefaultValue,
+			}
+		}
+	}
+	
+	// Set timeout if specified
+	if assignment.TimeoutSeconds > 0 {
+		t.Timeout = time.Duration(assignment.TimeoutSeconds) * time.Second
+	}
+	
+	// Set max retries
+	if assignment.MaxRetries > 0 {
+		t.MaxRetries = int(assignment.MaxRetries)
+	}
+	
+	// Default to GET if method not specified
+	if t.Method == "" {
+		t.Method = "GET"
+		nc.logger.Debug("Method not specified, defaulting to GET",
+			"task_id", t.ID)
+	}
+	
+	// Convert storage config if present
+	if assignment.StorageConfig != nil {
+		t.StorageConf = task.StorageConfig{
+			Type:       assignment.StorageConfig.Type,
+			Database:   assignment.StorageConfig.Database,
+			Collection: assignment.StorageConfig.Collection,
+			Table:      assignment.StorageConfig.Table,
+			Bucket:     assignment.StorageConfig.Bucket,
+			Path:       assignment.StorageConfig.Path,
+			Format:     assignment.StorageConfig.Format,
+			Options:    make(map[string]interface{}),
+		}
+		
+		// Convert options
+		for k, v := range assignment.StorageConfig.Options {
+			t.StorageConf.Options[k] = v
+		}
+		
+		nc.logger.Info("Task has storage config",
+			"task_id", t.ID,
+			"storage_type", t.StorageConf.Type,
+			"database", t.StorageConf.Database,
+			"collection", t.StorageConf.Collection)
 	}
 
 	// Add to node's task queue

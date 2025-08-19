@@ -201,13 +201,24 @@ func (c *Coordinator) assignTaskToNode(t *task.Task, node *NodeInfo) error {
 	// Create task assignment message
 	assignment := &pb.TaskAssignment{
 		TaskId:         t.ID,
+		ParentId:       t.ParentID,  // Include parent task ID
 		Url:            t.URL,
-		Method:         "GET",
+		Method:         t.Method,  // Use actual method from task
 		Priority:       pb.TaskPriority(t.Priority),
 		Headers:        t.Headers,
+		Body:           t.Body,  // Include request body
 		MaxRetries:     int32(t.MaxRetries),
 		TimeoutSeconds: int32(30), // Default 30 seconds
 		Metadata:       make(map[string]string),
+		TaskType:       t.Type,  // Include task type
+		Cookies:        t.Cookies,  // Include cookies
+		ProjectId:      t.ProjectID,  // Include project ID for Lua scripts
+		LuaScript:      t.LuaScript,  // Include Lua script name
+	}
+	
+	// Default method to GET if not specified
+	if assignment.Method == "" {
+		assignment.Method = "GET"
 	}
 	
 	// Convert metadata
@@ -215,6 +226,75 @@ func (c *Coordinator) assignTaskToNode(t *task.Task, node *NodeInfo) error {
 		if str, ok := v.(string); ok {
 			assignment.Metadata[k] = str
 		}
+	}
+	
+	// Log Lua script configuration
+	if t.ProjectID != "" || t.LuaScript != "" {
+		c.logger.Info("Task has Lua script configuration",
+			"task_id", t.ID,
+			"project_id", t.ProjectID,
+			"lua_script", t.LuaScript)
+	}
+	
+	// Convert extract rules
+	if len(t.ExtractRules) > 0 {
+		assignment.ExtractRules = make([]*pb.ExtractRule, len(t.ExtractRules))
+		for i, rule := range t.ExtractRules {
+			// Convert type to protobuf enum
+			var selectorType pb.SelectorType
+			switch rule.Type {
+			case "css":
+				selectorType = pb.SelectorType_SELECTOR_CSS
+			case "xpath":
+				selectorType = pb.SelectorType_SELECTOR_XPATH
+			case "json", "jsonpath":
+				selectorType = pb.SelectorType_SELECTOR_JSONPATH
+			case "regex":
+				selectorType = pb.SelectorType_SELECTOR_REGEX
+			default:
+				selectorType = pb.SelectorType_SELECTOR_CSS
+			}
+			
+			assignment.ExtractRules[i] = &pb.ExtractRule{
+				Field:        rule.Field,
+				Selector:     rule.Selector,
+				Type:         selectorType,
+				Attribute:    rule.Attribute,
+				Multiple:     rule.Multiple,
+				DefaultValue: fmt.Sprintf("%v", rule.Default),
+			}
+		}
+		
+		c.logger.Info("Task has extract rules",
+			"task_id", t.ID,
+			"rules_count", len(t.ExtractRules))
+	}
+	
+	// Convert storage config
+	if t.StorageConf.Type != "" {
+		assignment.StorageConfig = &pb.StorageConfig{
+			Type:       t.StorageConf.Type,
+			Database:   t.StorageConf.Database,
+			Collection: t.StorageConf.Collection,
+			Table:      t.StorageConf.Table,
+			Bucket:     t.StorageConf.Bucket,
+			Path:       t.StorageConf.Path,
+			Format:     t.StorageConf.Format,
+			Options:    make(map[string]string),
+		}
+		
+		// Convert options
+		for k, v := range t.StorageConf.Options {
+			if str, ok := v.(string); ok {
+				assignment.StorageConfig.Options[k] = str
+			}
+		}
+		
+		c.logger.Info("Task has storage config",
+			"task_id", t.ID,
+			"storage_type", t.StorageConf.Type,
+			"database", t.StorageConf.Database,
+			"collection", t.StorageConf.Collection)
 	}
 	
 	// Send via gRPC
@@ -439,6 +519,7 @@ func (c *Coordinator) processSeedResult(ctx context.Context, result *TaskResult)
 	// Create new tasks from URLs
 	for _, url := range urls {
 		newTask := task.NewTask(url, string(task.TypeDetail), int(task.PriorityNormal))
+		newTask.ParentID = result.TaskID  // Set the actual ParentID field
 		newTask.SetMetadata("parent_id", result.TaskID)
 		newTask.SetMetadata("source", "seed_expansion")
 		

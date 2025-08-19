@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NHYCRaymond/go-backend-kit/crawler/factory"
+	"github.com/NHYCRaymond/go-backend-kit/crawler/fetcher"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
 	"github.com/NHYCRaymond/go-backend-kit/logging"
 	"github.com/go-redis/redis/v8"
@@ -132,11 +133,14 @@ type TaskResult struct {
 
 // NewNode creates a new node
 func NewNode(config *NodeConfig) (*Node, error) {
-	// Get logger first for debugging
+	// Get logger - if not initialized, create a default one
 	logger := logging.GetLogger()
-	if logger != nil {
-		logger.Info("NewNode called", "config", config)
+	if logger == nil {
+		// Fallback to a simple logger if logging not initialized
+		logger = slog.Default()
 	}
+	
+	logger.Info("NewNode called", "config", config)
 
 	hostname, _ := os.Hostname()
 
@@ -144,10 +148,8 @@ func NewNode(config *NodeConfig) (*Node, error) {
 		config.ID = fmt.Sprintf("node-%s", uuid.New().String()[:8])
 	}
 
-	// Create Redis client using our database package
-	if logger != nil {
-		logger.Info("Creating Redis client", "addr", config.RedisAddr)
-	}
+	// Create Redis client
+	logger.Info("Creating Redis client", "addr", config.RedisAddr)
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: config.RedisAddr,
 	})
@@ -155,27 +157,13 @@ func NewNode(config *NodeConfig) (*Node, error) {
 	// Test Redis connection
 	ctx := context.Background()
 	if err := redisClient.Ping(ctx).Err(); err != nil {
-		if logger != nil {
-			logger.Error("Failed to connect to Redis", "error", err)
-		}
+		logger.Error("Failed to connect to Redis", "error", err)
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
-	if logger != nil {
-		logger.Info("Connected to Redis in NewNode")
-	}
-
-	// Logger is already initialized in main, just use it
-	if logger == nil {
-		logger = logging.GetLogger()
-	}
-	if logger != nil {
-		logger.Info("Logger obtained successfully")
-	}
+	logger.Info("Connected to Redis")
 
 	// Get local IP address
-	if logger != nil {
-		logger.Info("Getting local IP address")
-	}
+	logger.Info("Getting local IP address")
 	localIP := "127.0.0.1"
 	if addrs, err := net.InterfaceAddrs(); err == nil {
 		for _, addr := range addrs {
@@ -187,13 +175,8 @@ func NewNode(config *NodeConfig) (*Node, error) {
 			}
 		}
 	}
-	if logger != nil {
-		logger.Info("Local IP obtained", "ip", localIP)
-	}
-
-	if logger != nil {
-		logger.Info("Creating Node struct")
-	}
+	logger.Info("Local IP obtained", "ip", localIP)
+	logger.Info("Creating Node struct")
 
 	node := &Node{
 		ID:           config.ID,
@@ -239,19 +222,13 @@ func NewNode(config *NodeConfig) (*Node, error) {
 		logger = node.logger
 	}
 
-	if logger != nil {
-		logger.Info("Node struct created", "node_id", node.ID)
-	}
+	logger.Info("Node struct created", "node_id", node.ID)
 
 	// Get system resources
-	if logger != nil {
-		logger.Info("Updating resource info")
-	}
+	logger.Info("Updating resource info")
 	node.updateResourceInfo()
 
-	if logger != nil {
-		logger.Info("Node initialization complete", "node_id", node.ID)
-	}
+	logger.Info("Node initialization complete", "node_id", node.ID)
 
 	return node, nil
 }
@@ -738,33 +715,69 @@ func (w *Worker) executeTask(ctx context.Context, t *task.Task, result *TaskResu
 		return w.executeTaskEnhanced(ctx, t, result)
 	}
 	
-	// Fallback: basic implementation for testing
-	w.Node.logger.Info("Executing task (basic mode)",
+	// No basic mode - must use real fetcher
+	w.Node.logger.Error("❌ No executor configured - using real HTTP fetcher",
 		"task_id", t.ID,
 		"worker_id", w.ID,
 		"url", t.URL)
 
-	// Simulate basic HTTP fetch
-	time.Sleep(2 * time.Second)
+	// Create a simple HTTP fetcher for fallback
+	httpFetcher := fetcher.NewHTTPFetcher()
 	
-	// Simulate successful execution
+	// Execute the actual HTTP request
+	w.Node.logger.Info("🌐 Fetching URL",
+		"task_id", t.ID,
+		"url", t.URL,
+		"method", t.Method)
+	
+	response, err := httpFetcher.Fetch(ctx, t)
+	if err != nil {
+		result.Status = "failed"
+		result.Error = fmt.Sprintf("Fetch failed: %v", err)
+		w.Node.logger.Error("❌ HTTP fetch failed",
+			"task_id", t.ID,
+			"url", t.URL,
+			"error", err)
+		return err
+	}
+	
+	// Log actual response details
+	w.Node.logger.Info("✅ HTTP fetch succeeded",
+		"task_id", t.ID,
+		"url", t.URL,
+		"status_code", response.StatusCode,
+		"size", response.Size,
+		"duration_ms", response.Duration)
+	
+	// Store the actual response data
 	result.Status = "success"
+	result.BytesRead = response.Size
 	result.Data = []map[string]interface{}{
 		{
-			"url":       t.URL,
-			"timestamp": time.Now(),
-			"message":   "Task executed in basic mode (no executor configured)",
+			"url":         t.URL,
+			"status_code": response.StatusCode,
+			"size":        response.Size,
+			"duration_ms": response.Duration,
+			"timestamp":   time.Now(),
+			"content_preview": func() string {
+				preview := string(response.Body)
+				if len(preview) > 500 {
+					return preview[:500] + "..."
+				}
+				return preview
+			}(),
 		},
 	}
 	
-	// Update metrics
-	atomic.AddInt64(&w.Node.BytesDownloaded, 1024)
+	// Update real metrics
+	atomic.AddInt64(&w.Node.BytesDownloaded, response.Size)
 	atomic.AddInt64(&w.Node.ItemsExtracted, 1)
 	
-	w.Node.logger.Info("Task completed (basic mode)",
+	w.Node.logger.Info("📊 Task completed",
 		"task_id", t.ID,
 		"worker_id", w.ID,
-		"status", result.Status)
+		"status", result.Status,
+		"bytes_fetched", response.Size)
 
 	return nil
 }

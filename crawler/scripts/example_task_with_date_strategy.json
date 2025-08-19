@@ -1,0 +1,224 @@
+{
+  "_id": {
+    "$oid": "689f3c26cd07b9c25bec4372"
+  },
+  "name": "drip_ground_board",
+  "type": "api",
+  "category": "sports",
+  "description": "滴球场地预订数据爬取",
+  "version": "1.0.0",
+  "status": {
+    "enabled": true,
+    "last_run": {
+      "$date": "2025-08-17T12:35:03.100Z"
+    },
+    "next_run": {
+      "$date": "2025-08-17T12:35:33.100Z"
+    },
+    "run_count": {
+      "$numberLong": "1869"
+    },
+    "success_count": {
+      "$numberLong": "3749"
+    },
+    "failure_count": {
+      "$numberLong": "568"
+    },
+    "last_success": {
+      "$date": "2025-08-17T12:35:03.100Z"
+    },
+    "last_failure": {
+      "$date": "2025-08-17T11:52:01.014Z"
+    },
+    "error_message": "invalid JSON content (status=400, preview: DecodingFailure at : Got value '[{\"Key\":\"groupId\",\"Value\":1330},{\"Key\":\"date\",\"Value\":\"${DATE}\"}]' with wrong type, expecting object)"
+  },
+  "config": {
+    "priority": 5,
+    "timeout": 30,
+    "max_retries": 3,
+    "retry_delay": 0,
+    "concurrency": 1,
+    "rate_limit": {
+      "enabled": true,
+      "requests_per_min": 12,
+      "requests_per_hour": 0,
+      "burst_size": 0
+    },
+    "parameters": null
+  },
+  "schedule": {
+    "type": "interval",
+    "expression": "30s",
+    "timezone": "Asia/Shanghai",
+    "start_time": null,
+    "end_time": null,
+    "conditions": null
+  },
+  "execution": {
+    "mode": "",
+    "batch_size": 0,
+    "parallelism": 0,
+    "dependencies": null,
+    "pre_hooks": null,
+    "post_hooks": null,
+    "error_handling": {
+      "strategy": "",
+      "retry_strategy": "",
+      "max_retries": 0,
+      "notify_on": null
+    }
+  },
+  "request": {
+    "method": "POST",
+    "url": "https://zd.drip.im/api-zd-wap/booking/order/getGroundBoard",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Origin": "https://zd.drip.im",
+      "Referer": "https://zd.drip.im/",
+      "miniprogram": "true"
+    },
+    "query_params": {
+      "special": "13249191"
+    },
+    "body": {
+      "groupId": 1330,
+      "date": "${DATE}"
+    },
+    "auth": {
+      "type": "",
+      "config": null
+    },
+    "proxy": {
+      "enabled": false,
+      "type": "",
+      "rotation": false,
+      "servers": null
+    },
+    "variables": [
+      {
+        "name": "DATE",
+        "type": "date",
+        "source": "function",
+        "expression": "${DATE}",
+        "default": null,
+        "strategy": {
+          "mode": "range",
+          "format": "2006-01-02",
+          "start_days": 0,
+          "end_days": 7,
+          "day_step": 1,
+          "custom_days": null
+        }
+      }
+    ],
+    "pagination": {
+      "enabled": false,
+      "type": "",
+      "start_param": "",
+      "limit_param": "",
+      "start_value": null,
+      "page_size": 0,
+      "max_pages": 0,
+      "stop_condition": ""
+    },
+    "cookies": {
+      "self_mini_openid_wx7763c8d2a1ab196713249191": "HzZcAWJZMoNrliOZJhToFJCp6iyIkugQPY6pk5q1dAOFZ2IY-FxcLM0JTgU="
+    }
+  },
+  "extraction": {
+    "type": "json",
+    "rules": [
+      {
+        "field": "group_id",
+        "path": "result.groupId",
+        "type": "integer",
+        "required": true,
+        "default": null,
+        "transform": null,
+        "validation": null,
+        "children": null
+      },
+      {
+        "field": "date",
+        "path": "result.date",
+        "type": "string",
+        "required": true,
+        "default": null,
+        "transform": null,
+        "validation": null,
+        "children": null
+      },
+      {
+        "field": "grounds",
+        "path": "result.groundDatas",
+        "type": "array",
+        "required": true,
+        "default": null,
+        "transform": null,
+        "validation": null,
+        "children": null
+      }
+    ],
+    "scripts": [],
+    "templates": []
+  },
+  "transform": {
+    "enabled": false,
+    "processors": null
+  },
+  "validation": {
+    "enabled": false,
+    "rules": null
+  },
+  "storage": {
+    "targets": [
+      {
+        "name": "primary",
+        "type": "mongodb",
+        "purpose": "primary",
+        "config": {
+          "database": "crawler",
+          "collection": "court_booking_boards",
+          "upsert": true
+        },
+        "conditions": null
+      }
+    ]
+  },
+  "monitoring": {
+    "metrics": {
+      "enabled": false,
+      "collectors": [],
+      "labels": {}
+    },
+    "logging": {
+      "level": "info",
+      "sample_rate": 1
+    },
+    "alerting": {
+      "enabled": false,
+      "rules": [],
+      "destinations": []
+    },
+    "tracing": {
+      "enabled": false,
+      "sampling_rate": 0.1,
+      "exporter": ""
+    }
+  },
+  "metadata": null,
+  "tags": [
+    "production",
+    "venue",
+    "booking"
+  ],
+  "created_at": {
+    "$date": "2025-08-15T13:54:46.656Z"
+  },
+  "updated_at": {
+    "$date": "2025-08-17T12:35:03.100Z"
+  },
+  "created_by": "system",
+  "updated_by": "system"
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/NHYCRaymond/go-backend-kit/crawler/factory"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/fetcher"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
+	"github.com/NHYCRaymond/go-backend-kit/database"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
@@ -19,14 +20,21 @@ import (
 // EnhancedNodeConfig contains enhanced node configuration
 type EnhancedNodeConfig struct {
 	*NodeConfig
-	MongoDB *mongo.Database
-	MySQL   *gorm.DB
+	MongoDB        *mongo.Database
+	MongoDBWrapper *database.MongoDatabase  // Add wrapper for storage
+	MySQL          *gorm.DB
+	ScriptBase     string                   // Lua脚本基础路径
 }
 
 // EnhanceNode adds executor and factory to an existing node
 func EnhanceNode(node *Node, config *EnhancedNodeConfig) error {
 	// Create factory for pipeline and storage
 	node.factory = factory.NewFactory(config.MongoDB, config.MySQL, node.redis)
+	
+	// Set MongoDB wrapper if available
+	if config.MongoDBWrapper != nil {
+		node.factory.SetMongoDBWrapper(config.MongoDBWrapper)
+	}
 
 	// Create multiple extractors for different content types
 	node.extractors = map[string]task.Extractor{
@@ -35,18 +43,22 @@ func EnhanceNode(node *Node, config *EnhancedNodeConfig) error {
 		"html": extractor.NewCSSExtractor(), // CSS extractor works for HTML
 	}
 
-	// Create executor with default fetcher
-	// Extractor will be selected dynamically based on task type
+	// Create executor with Lua support
+	// The executor now has MongoDB and Redis for Lua scripts
 	exec := executor.NewExecutor(&executor.Config{
-		Fetcher:   fetcher.NewHTTPFetcher(),
-		Extractor: nil, // Will be set dynamically per task
-		Factory:   node.factory,
-		Logger:    node.logger,
+		Fetcher:    fetcher.NewHTTPFetcher(),
+		Extractor:  nil, // Will be set dynamically per task
+		Factory:    node.factory,
+		Logger:     node.logger,
+		MongoDB:    config.MongoDB,    // Add MongoDB for Lua
+		Redis:      node.redis,         // Add Redis for Lua
+		Scheduler:  nil,                // Node doesn't need scheduler, tasks come from queue
+		ScriptBase: config.ScriptBase,  // Pass script base path for Lua
 	})
 
 	node.executor = exec
 
-	node.logger.Info("Node enhanced with executor and factory", "node_id", node.ID)
+	node.logger.Info("Node enhanced with executor and factory (Lua support enabled)", "node_id", node.ID)
 
 	return nil
 }
@@ -79,17 +91,75 @@ func (w *Worker) executeTaskEnhanced(ctx context.Context, t *task.Task, result *
 			"extractor_type", extractorType)
 	}
 
+	// Check if task has Lua script configured
+	hasLuaScript := t.ProjectID != "" && t.LuaScript != ""
+	
 	w.Node.logger.Info("Executing task with enhanced executor",
 		"task_id", t.ID,
 		"worker_id", w.ID,
-		"url", t.URL)
+		"url", t.URL,
+		"method", t.Method,
+		"task_type", t.Type,
+		"has_extract_rules", len(t.ExtractRules) > 0,
+		"has_lua_script", hasLuaScript,
+		"project_id", t.ProjectID,
+		"lua_script", t.LuaScript)
+	
+	// Log request details for API tasks
+	if t.Type == "api" {
+		w.Node.logger.Info("📤 API Request details",
+			"task_id", t.ID,
+			"url", t.URL,
+			"method", t.Method,
+			"headers", t.Headers,
+			"body", string(t.Body))
+		
+		// Log extraction rules
+		if len(t.ExtractRules) > 0 {
+			for i, rule := range t.ExtractRules {
+				w.Node.logger.Info("🎯 Extraction rule",
+					"task_id", t.ID,
+					"rule_index", i,
+					"field", rule.Field,
+					"selector", rule.Selector,
+					"type", rule.Type)
+			}
+		}
+	}
 
 	// Execute using the new executor
 	execResult, err := w.Node.executor.Execute(ctx, t)
 	if err != nil {
 		result.Status = "failed"
 		result.Error = err.Error()
+		w.Node.logger.Error("Task execution failed",
+			"task_id", t.ID,
+			"error", err)
 		return err
+	}
+	
+	w.Node.logger.Info("Task execution completed",
+		"task_id", t.ID,
+		"status", execResult.Status,
+		"bytes_fetched", execResult.BytesFetched,
+		"items_extracted", execResult.ItemsExtracted,
+		"links_found", len(execResult.Links),
+		"duration_ms", execResult.Duration)
+	
+	// Log extracted data for API tasks
+	if t.Type == "api" && execResult.Data != nil {
+		// Convert data to JSON for logging
+		dataJSON, err := json.Marshal(execResult.Data)
+		if err == nil {
+			dataPreview := string(dataJSON)
+			if len(dataPreview) > 1000 {
+				dataPreview = dataPreview[:1000] + "..."
+			}
+			w.Node.logger.Info("📊 Extracted data from API",
+				"task_id", t.ID,
+				"url", t.URL,
+				"data", dataPreview)
+		}
 	}
 
 	// Convert executor result to TaskResult, preserving task metadata
@@ -101,6 +171,13 @@ func (w *Worker) executeTaskEnhanced(ctx context.Context, t *task.Task, result *
 		"task_name":  t.Name,
 		"extracted":  execResult.Data,  // Store extracted data separately
 	}
+	
+	w.Node.logger.Debug("Building task result",
+		"task_id", t.ID,
+		"exec_status", execResult.Status,
+		"exec_bytes", execResult.BytesFetched,
+		"exec_items", execResult.ItemsExtracted,
+		"data_keys", len(execResult.Data))
 	
 	result.Status = execResult.Status
 	result.Data = []map[string]interface{}{resultData}

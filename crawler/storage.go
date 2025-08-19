@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -139,20 +140,16 @@ func (ms *MemoryStorage) BatchGet(ctx context.Context, keys []string) (map[strin
 	return result, nil
 }
 
-// Query performs a query (simplified for memory storage)
-func (ms *MemoryStorage) Query(ctx context.Context, query interface{}) ([]interface{}, error) {
+// Query implements core.Storage interface
+func (ms *MemoryStorage) Query(ctx context.Context, collection string, filter map[string]interface{}) ([]map[string]interface{}, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	
-	// Simple pattern matching for memory storage
-	pattern, ok := query.(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid query type")
-	}
-	
-	var results []interface{}
+	var results []map[string]interface{}
 	now := time.Now()
 	
+	// Simple implementation - return all items from collection
+	prefix := collection + ":"
 	for key, value := range ms.data {
 		// Check if expired
 		if expiry, exists := ms.ttl[key]; exists {
@@ -161,9 +158,23 @@ func (ms *MemoryStorage) Query(ctx context.Context, query interface{}) ([]interf
 			}
 		}
 		
-		// Simple prefix matching
-		if len(pattern) > 0 && len(key) >= len(pattern) && key[:len(pattern)] == pattern {
-			results = append(results, value)
+		if strings.HasPrefix(key, prefix) {
+			if mapValue, ok := value.(map[string]interface{}); ok {
+				// Simple filter matching - check if all filter keys match
+				if len(filter) > 0 {
+					match := true
+					for fk, fv := range filter {
+						if mv, exists := mapValue[fk]; !exists || mv != fv {
+							match = false
+							break
+						}
+					}
+					if !match {
+						continue
+					}
+				}
+				results = append(results, mapValue)
+			}
 		}
 	}
 	
@@ -218,6 +229,27 @@ func (ms *MemoryStorage) cleanup() {
 		
 		ms.mu.Unlock()
 	}
+}
+
+// Save implements core.Storage interface
+func (ms *MemoryStorage) Save(ctx context.Context, collection string, data []map[string]interface{}) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	
+	for i, item := range data {
+		key := fmt.Sprintf("%s:%d:%d", collection, time.Now().UnixNano(), i)
+		ms.data[key] = item
+		ms.ttl[key] = time.Now().Add(24 * time.Hour)
+	}
+	
+	return nil
+}
+
+
+// Close implements core.Storage interface
+func (ms *MemoryStorage) Close() error {
+	// Nothing to close for in-memory storage
+	return nil
 }
 
 // RedisStorage implements Redis-based storage
@@ -347,8 +379,8 @@ func (rs *RedisStorage) BatchGet(ctx context.Context, keys []string) (map[string
 	return result, nil
 }
 
-// Query performs a query using Redis patterns
-func (rs *RedisStorage) Query(ctx context.Context, query interface{}) ([]interface{}, error) {
+// QueryGeneric performs a generic query using Redis patterns
+func (rs *RedisStorage) QueryGeneric(ctx context.Context, query interface{}) ([]interface{}, error) {
 	pattern, ok := query.(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid query type")
@@ -453,6 +485,36 @@ func (rs *RedisStorage) Clear(ctx context.Context) error {
 	}
 	
 	return nil
+}
+
+// Close implements core.Storage interface
+func (rs *RedisStorage) Close() error {
+	// Redis client is managed externally
+	return nil
+}
+
+// Save implements core.Storage interface
+func (rs *RedisStorage) Save(ctx context.Context, collection string, data []map[string]interface{}) error {
+	pipe := rs.client.Pipeline()
+	
+	for i, item := range data {
+		key := rs.getKey(fmt.Sprintf("%s:%d:%d", collection, time.Now().UnixNano(), i))
+		jsonData, err := json.Marshal(item)
+		if err != nil {
+			return err
+		}
+		pipe.Set(ctx, key, jsonData, 24*time.Hour)
+	}
+	
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// Query implements core.Storage interface
+func (rs *RedisStorage) Query(ctx context.Context, collection string, filter map[string]interface{}) ([]map[string]interface{}, error) {
+	// Redis doesn't support complex queries
+	// This is a simple implementation that returns empty results
+	return []map[string]interface{}{}, nil
 }
 
 // getKey returns the full Redis key with prefix
