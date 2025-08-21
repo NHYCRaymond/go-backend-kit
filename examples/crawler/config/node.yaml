@@ -73,7 +73,7 @@ crawler:
   # 1. Command line: --scripts=/custom/path
   # 2. Environment: CRAWLER_SCRIPT_BASE=/custom/path
   # 3. This config value
-  script_base: "/Users/raymond/Projects/go-backend-kit/crawler/scripts"  # Base path for Lua scripts (absolute path)
+  script_base: "/Users/raymond/Projects/go-backend-kit/examples/crawler"  # Base path for Lua scripts (absolute path)
   
   # Script directory structure:
   # ${script_base}/projects/${project_id}/

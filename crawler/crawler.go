@@ -342,11 +342,15 @@ func (c *Crawler) initStorage() error {
 	case "redis":
 		c.storage = NewRedisStorage(c.redis, storageConfig.Database)
 	case "mongodb":
-		// TODO: Implement MongoDB storage
-		return fmt.Errorf("MongoDB storage not yet implemented")
+		// Note: MongoDB data storage is handled by Lua scripts (see parser/lua_engine.go)
+		// This interface is for crawler metadata only (tasks, results cache)
+		// TODO: Implement if metadata storage in MongoDB is needed
+		return fmt.Errorf("MongoDB metadata storage not implemented (data storage via Lua)")
 	case "mysql":
-		// TODO: Implement MySQL storage
-		return fmt.Errorf("MySQL storage not yet implemented")
+		// Note: MySQL storage would be for crawler metadata only
+		// Actual data storage should be handled by Lua scripts for flexibility
+		// TODO: Implement if metadata storage in MySQL is needed
+		return fmt.Errorf("MySQL metadata storage not implemented (data storage via Lua)")
 	default:
 		return fmt.Errorf("unknown storage type: %s", storageConfig.Type)
 	}

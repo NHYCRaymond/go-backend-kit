@@ -24,7 +24,6 @@ type Coordinator struct {
 	redis          *redis.Client
 	logger         *slog.Logger
 	scheduler      TaskResultUpdater // Interface for updating task results
-	changeDetector ChangeDetector    // Interface for processing venue changes
 
 	// Configuration
 	config *CoordinatorConfig
@@ -33,6 +32,9 @@ type Coordinator struct {
 	mu           sync.RWMutex
 	taskAssignments map[string]string // taskID -> nodeID mapping
 	pendingTasks    map[string]*task.Task
+	
+	// Middleware
+	middlewareChain *MiddlewareChain
 	
 	// Control
 	ctx      context.Context
@@ -43,11 +45,6 @@ type Coordinator struct {
 // TaskResultUpdater interface for updating task results
 type TaskResultUpdater interface {
 	UpdateTaskResult(ctx context.Context, taskInstanceID string, success bool, errorMsg string)
-}
-
-// ChangeDetector interface for processing venue changes
-type ChangeDetector interface {
-	ProcessTaskResult(taskID string, result map[string]interface{}) error
 }
 
 // CoordinatorConfig contains coordinator configuration
@@ -63,7 +60,7 @@ type CoordinatorConfig struct {
 func NewCoordinator(config *CoordinatorConfig, cluster *ClusterManager, dispatcher *task.Dispatcher, hub *communication.CommunicationHub, redis *redis.Client, logger *slog.Logger) *Coordinator {
 	ctx, cancel := context.WithCancel(context.Background())
 	
-	return &Coordinator{
+	c := &Coordinator{
 		cluster:         cluster,
 		dispatcher:      dispatcher,
 		hub:            hub,
@@ -72,10 +69,16 @@ func NewCoordinator(config *CoordinatorConfig, cluster *ClusterManager, dispatch
 		config:         config,
 		taskAssignments: make(map[string]string),
 		pendingTasks:   make(map[string]*task.Task),
+		middlewareChain: NewMiddlewareChain(),
 		ctx:           ctx,
 		cancel:        cancel,
 		stopChan:      make(chan struct{}),
 	}
+	
+	// Add default middleware
+	c.setupDefaultMiddleware()
+	
+	return c
 }
 
 // SetScheduler sets the task result updater (scheduler)
@@ -83,9 +86,31 @@ func (c *Coordinator) SetScheduler(scheduler TaskResultUpdater) {
 	c.scheduler = scheduler
 }
 
-// SetChangeDetector sets the change detector for venue monitoring
-func (c *Coordinator) SetChangeDetector(detector ChangeDetector) {
-	c.changeDetector = detector
+// setupDefaultMiddleware sets up default middleware chain
+func (c *Coordinator) setupDefaultMiddleware() {
+	// Add event publishing middleware
+	eventMiddleware := NewEventPublishMiddleware(c.redis, c.logger)
+	c.middlewareChain.Use(eventMiddleware)
+	
+	// Add metrics middleware
+	metricsMiddleware := NewMetricsMiddleware(c.logger)
+	c.middlewareChain.Use(metricsMiddleware)
+}
+
+// UseMiddleware adds a middleware to the chain
+func (c *Coordinator) UseMiddleware(middleware ResultMiddleware) {
+	c.middlewareChain.Use(middleware)
+	c.logger.Info("Added middleware", "name", middleware.Name())
+}
+
+// EnableCompression enables compression middleware
+func (c *Coordinator) EnableCompression() error {
+	compressionMiddleware, err := NewCompressionMiddleware(c.redis, c.config.RedisPrefix, c.logger)
+	if err != nil {
+		return fmt.Errorf("failed to create compression middleware: %w", err)
+	}
+	c.UseMiddleware(compressionMiddleware)
+	return nil
 }
 
 // Start starts the coordinator
@@ -465,39 +490,11 @@ func (c *Coordinator) handleTaskResult(ctx context.Context, result *TaskResult) 
 				"error", err)
 		}
 		
-		// Process with change detector for venue monitoring
-		if c.changeDetector != nil && t != nil {
-				// Prepare result data with source information
-				resultData := make(map[string]interface{})
-				
-				// Merge all data from result
-				if len(result.Data) > 0 {
-					// Combine all data maps
-					for _, dataMap := range result.Data {
-						for k, v := range dataMap {
-							resultData[k] = v
-						}
-					}
-				}
-				
-				// Add task metadata
-				resultData["task_id"] = result.TaskID
-				// Extract source from task metadata or project ID
-				if t.ProjectID != "" {
-					resultData["source"] = t.ProjectID
-				} else if source, ok := t.Metadata["source"].(string); ok {
-					resultData["source"] = source
-				}
-				resultData["timestamp"] = result.EndTime
-				
-				// Process with change detector
-				go func() {
-					if err := c.changeDetector.ProcessTaskResult(result.TaskID, resultData); err != nil {
-						c.logger.Error("Failed to process task result with change detector",
-							"task_id", result.TaskID,
-							"error", err)
-					}
-				}()
+		// Process result through middleware chain
+		if err := c.middlewareChain.Execute(ctx, result); err != nil {
+			c.logger.Error("Middleware chain execution failed",
+				"task_id", result.TaskID,
+				"error", err)
 		}
 		
 		// Process seed expansion if needed
@@ -600,6 +597,7 @@ func (c *Coordinator) reassignFailedTasks() {
 		}
 	}
 }
+
 
 // checkAndReassignTasks checks for tasks on dead nodes and reassigns them
 func (c *Coordinator) checkAndReassignTasks() {
