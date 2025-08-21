@@ -18,12 +18,13 @@ import (
 // Coordinator coordinates task distribution between ClusterManager and Nodes
 type Coordinator struct {
 	// Components
-	cluster    *ClusterManager
-	dispatcher *task.Dispatcher
-	hub        *communication.CommunicationHub
-	redis      *redis.Client
-	logger     *slog.Logger
-	scheduler  TaskResultUpdater // Interface for updating task results
+	cluster        *ClusterManager
+	dispatcher     *task.Dispatcher
+	hub            *communication.CommunicationHub
+	redis          *redis.Client
+	logger         *slog.Logger
+	scheduler      TaskResultUpdater // Interface for updating task results
+	changeDetector ChangeDetector    // Interface for processing venue changes
 
 	// Configuration
 	config *CoordinatorConfig
@@ -42,6 +43,11 @@ type Coordinator struct {
 // TaskResultUpdater interface for updating task results
 type TaskResultUpdater interface {
 	UpdateTaskResult(ctx context.Context, taskInstanceID string, success bool, errorMsg string)
+}
+
+// ChangeDetector interface for processing venue changes
+type ChangeDetector interface {
+	ProcessTaskResult(taskID string, result map[string]interface{}) error
 }
 
 // CoordinatorConfig contains coordinator configuration
@@ -75,6 +81,11 @@ func NewCoordinator(config *CoordinatorConfig, cluster *ClusterManager, dispatch
 // SetScheduler sets the task result updater (scheduler)
 func (c *Coordinator) SetScheduler(scheduler TaskResultUpdater) {
 	c.scheduler = scheduler
+}
+
+// SetChangeDetector sets the change detector for venue monitoring
+func (c *Coordinator) SetChangeDetector(detector ChangeDetector) {
+	c.changeDetector = detector
 }
 
 // Start starts the coordinator
@@ -327,7 +338,8 @@ func (c *Coordinator) assignTaskToNode(t *task.Task, node *NodeInfo) error {
 	}
 	
 	data, _ := json.Marshal(assignmentData)
-	c.redis.Set(ctx, assignmentKey, data, 24*time.Hour)
+	// Assignment should complete within 30 minutes
+	c.redis.Set(ctx, assignmentKey, data, 30*time.Minute)
 	
 	c.logger.Debug("Task assigned",
 		"task_id", t.ID,
@@ -410,6 +422,8 @@ func (c *Coordinator) handleTaskResults() {
 // handleTaskResult handles a single task result
 func (c *Coordinator) handleTaskResult(ctx context.Context, result *TaskResult) {
 	c.mu.Lock()
+	// Get task before deleting it (needed for change detector)
+	t := c.pendingTasks[result.TaskID]
 	delete(c.pendingTasks, result.TaskID)
 	nodeID := c.taskAssignments[result.TaskID]
 	delete(c.taskAssignments, result.TaskID)
@@ -444,14 +458,50 @@ func (c *Coordinator) handleTaskResult(ctx context.Context, result *TaskResult) 
 			return
 		}
 		
-		if err := c.redis.Set(ctx, resultKey, data, 7*24*time.Hour).Err(); err != nil {
+		// Only keep results for 30 minutes due to large data volume
+		if err := c.redis.Set(ctx, resultKey, data, 30*time.Minute).Err(); err != nil {
 			c.logger.Error("Failed to store task result in Redis",
 				"task_id", result.TaskID,
 				"error", err)
 		}
 		
+		// Process with change detector for venue monitoring
+		if c.changeDetector != nil && t != nil {
+				// Prepare result data with source information
+				resultData := make(map[string]interface{})
+				
+				// Merge all data from result
+				if len(result.Data) > 0 {
+					// Combine all data maps
+					for _, dataMap := range result.Data {
+						for k, v := range dataMap {
+							resultData[k] = v
+						}
+					}
+				}
+				
+				// Add task metadata
+				resultData["task_id"] = result.TaskID
+				// Extract source from task metadata or project ID
+				if t.ProjectID != "" {
+					resultData["source"] = t.ProjectID
+				} else if source, ok := t.Metadata["source"].(string); ok {
+					resultData["source"] = source
+				}
+				resultData["timestamp"] = result.EndTime
+				
+				// Process with change detector
+				go func() {
+					if err := c.changeDetector.ProcessTaskResult(result.TaskID, resultData); err != nil {
+						c.logger.Error("Failed to process task result with change detector",
+							"task_id", result.TaskID,
+							"error", err)
+					}
+				}()
+		}
+		
 		// Process seed expansion if needed
-		if t, ok := c.pendingTasks[result.TaskID]; ok && t.Type == string(task.TypeSeed) {
+		if t != nil && t.Type == string(task.TypeSeed) {
 			c.processSeedResult(ctx, result)
 		}
 	}
@@ -486,7 +536,8 @@ func (c *Coordinator) handleTaskFailure(ctx context.Context, taskID string, reas
 		// Update task in Redis
 		taskKey := fmt.Sprintf("%s:task:%s", c.config.RedisPrefix, taskID)
 		data, _ := json.Marshal(t)
-		c.redis.Set(ctx, taskKey, data, 24*time.Hour)
+		// Task should be processed within 1 hour
+		c.redis.Set(ctx, taskKey, data, 1*time.Hour)
 	} else {
 		// Mark as permanently failed
 		t.Status = task.StatusFailed
@@ -503,7 +554,8 @@ func (c *Coordinator) handleTaskFailure(ctx context.Context, taskID string, reas
 			"retry_count": t.RetryCount,
 		}
 		data, _ := json.Marshal(failureData)
-		c.redis.Set(ctx, failureKey, data, 30*24*time.Hour)
+		// Keep failure info for 1 hour for debugging
+		c.redis.Set(ctx, failureKey, data, 1*time.Hour)
 	}
 }
 

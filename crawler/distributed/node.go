@@ -839,7 +839,8 @@ func (n *Node) handleResult(ctx context.Context, result *TaskResult) {
 		return
 	}
 
-	if err := n.redis.Set(ctx, resultKey, resultData, 24*time.Hour).Err(); err != nil {
+	// Keep results for 30 minutes only (large data volume)
+	if err := n.redis.Set(ctx, resultKey, resultData, 30*time.Minute).Err(); err != nil {
 		n.logger.Error("Failed to store task result in Redis",
 			"task_id", result.TaskID,
 			"error", err)
@@ -860,6 +861,8 @@ func (n *Node) handleResult(ctx context.Context, result *TaskResult) {
 	taskKey := fmt.Sprintf("%s:task:%s", n.config.RedisPrefix, result.TaskID)
 	n.redis.HSet(ctx, taskKey, "status", result.Status)
 	n.redis.HSet(ctx, taskKey, "completed_at", time.Now().Format(time.RFC3339))
+	// Set TTL for task data (30 minutes for completed tasks)
+	n.redis.Expire(ctx, taskKey, 30*time.Minute)
 
 	// Notify completion
 	if result.Status == "success" {

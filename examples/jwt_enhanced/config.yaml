@@ -1,0 +1,71 @@
+# Enhanced JWT Example Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  env: "development"
+
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+
+jwt:
+  secret_key: "your-super-secret-key-change-in-production"
+  access_expiration_mins: 15
+  refresh_expiration_mins: 10080  # 7 days
+  issuer: "go-backend-kit"
+  enable_jti: true
+  enable_device_tracking: true
+  enable_session_tracking: true
+  refresh_token_rotation: true
+  max_devices: 3
+  token_family: true
+
+middleware:
+  auth:
+    skip_paths:
+      - "/api/auth/login"
+      - "/api/auth/refresh"
+      - "/health"
+    token_header: "Authorization"
+    require_bearer: true
+    enable_blacklist: true
+    enable_audit: true
+  
+  audit:
+    enabled: true
+    log_to_redis: true
+    log_to_file: false
+    retention_days: 30
+    sensitive_fields:
+      - "password"
+      - "token"
+      - "secret"
+  
+  logger:
+    level: "info"
+    format: "json"
+    output: "stdout"
+    enable_body: false
+    skip_paths:
+      - "/health"
+      - "/metrics"
+  
+  rate_limit:
+    enable: true
+    window: "1m"
+    limit: 60
+    skip_paths:
+      - "/health"
+    key_generator: "ip"
+    headers: true
+  
+  security:
+    enable_cors: true
+    cors_origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+    enable_security_headers: true
+    frame_options: "DENY"
+    content_type_options: "nosniff"

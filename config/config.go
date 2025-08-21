@@ -60,6 +60,15 @@ type JWTConfig struct {
 	SecretKey             string `mapstructure:"secret_key"`
 	AccessExpirationMins  int    `mapstructure:"access_expiration_mins"`
 	RefreshExpirationMins int    `mapstructure:"refresh_expiration_mins"`
+	
+	// Enhanced JWT options
+	Issuer                string `mapstructure:"issuer"`
+	EnableJTI             bool   `mapstructure:"enable_jti"`
+	EnableDeviceTracking  bool   `mapstructure:"enable_device_tracking"`
+	EnableSessionTracking bool   `mapstructure:"enable_session_tracking"`
+	RefreshTokenRotation  bool   `mapstructure:"refresh_token_rotation"`
+	MaxDevices            int    `mapstructure:"max_devices"`
+	TokenFamily           bool   `mapstructure:"token_family"`
 }
 
 // LoggerConfig holds logger configurations
@@ -88,6 +97,11 @@ type AuthConfig struct {
 	TokenQueryParam string   `mapstructure:"token_query_param"`
 	RequireBearer   bool     `mapstructure:"require_bearer"`
 	EnableBlacklist bool     `mapstructure:"enable_blacklist"`
+	
+	// Audit logging
+	EnableAudit   bool     `mapstructure:"enable_audit"`
+	AuditPaths    []string `mapstructure:"audit_paths"`
+	AuditExclude  []string `mapstructure:"audit_exclude"`
 }
 
 // RateLimitConfig holds rate limit middleware configuration
@@ -109,12 +123,22 @@ type SecurityConfig struct {
 	ContentTypeOptions    string   `mapstructure:"content_type_options"`
 }
 
+// AuditConfig holds audit logging configuration
+type AuditConfig struct {
+	Enabled         bool     `mapstructure:"enabled"`
+	LogToRedis      bool     `mapstructure:"log_to_redis"`
+	LogToFile       bool     `mapstructure:"log_to_file"`
+	RetentionDays   int      `mapstructure:"retention_days"`
+	SensitiveFields []string `mapstructure:"sensitive_fields"`
+}
+
 // MiddlewareConfig holds middleware configurations
 type MiddlewareConfig struct {
 	Logger    LoggerConfig    `mapstructure:"logger"`
 	Auth      AuthConfig      `mapstructure:"auth"`
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
 	Security  SecurityConfig  `mapstructure:"security"`
+	Audit     AuditConfig     `mapstructure:"audit"`
 }
 
 // DatabaseConfig holds database configurations

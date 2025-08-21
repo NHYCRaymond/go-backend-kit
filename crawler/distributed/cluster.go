@@ -449,7 +449,8 @@ func (cm *ClusterManager) migrateTasksBetweenNodes(ctx context.Context, overload
 			}
 			
 			data, _ := json.Marshal(assignment)
-			cm.redis.Set(ctx, assignmentKey, data, 24*time.Hour)
+			// Assignment should complete within 30 minutes
+			cm.redis.Set(ctx, assignmentKey, data, 30*time.Minute)
 			
 			cm.logger.Info("Migrated task",
 				"task_id", taskID,

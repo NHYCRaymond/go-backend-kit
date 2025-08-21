@@ -1,0 +1,71 @@
+# 场地监控配置
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+
+mongo:
+  uri: "mongodb://localhost:27017"
+  database: "crawler"
+
+# 变更检测配置
+change_detector:
+  enabled: true
+  watch_fields: ["status", "available", "price"]
+  ignore_fields: ["updated_at", "crawled_at"]
+  subscription_api_url: ""  # 订阅服务地址（留空使用测试模式）
+  subscription_api_timeout: 10
+  cache_ttl: 60
+  workers: 5
+  queue_size: 1000
+
+# 通知配置
+notification:
+  dingtalk:
+    # 您的钉钉机器人 webhook
+    webhooks:
+      - name: "场地预订群"
+        url: "https://oapi.dingtalk.com/robot/send?access_token=348d61c66dc7ba986ebd59696a2850f1697ed1b397995737a2213c6cc025217f"
+        keywords: ["球球雷达", "场地", "预订"]
+    
+  pusher:
+    workers: 5
+    queue_size: 1000
+    retry_times: 3
+    retry_delay: 5
+
+# 监控的场地源
+venue_sources:
+  - source: "tennis_court"
+    name: "网球场"
+    enabled: true
+    
+  - source: "badminton_court"
+    name: "羽毛球场"
+    enabled: true
+    
+  - source: "swimming_pool"
+    name: "游泳池"
+    enabled: true
+    
+  - source: "gym"
+    name: "健身房"
+    enabled: true
+
+# 订阅规则示例（实际应该从订阅服务获取）
+subscriptions:
+  - user_id: "user_001"
+    user_name: "张三"
+    sources: ["tennis_court"]
+    time_slots:
+      - "19:00-20:00"
+      - "20:00-21:00"
+    webhook: "https://oapi.dingtalk.com/robot/send?access_token=348d61c66dc7ba986ebd59696a2850f1697ed1b397995737a2213c6cc025217f"
+    
+  - user_id: "user_002"
+    user_name: "李四"
+    sources: ["badminton_court", "gym"]
+    time_slots:
+      - "18:00-19:00"
+      - "19:00-20:00"
+    webhook: "https://oapi.dingtalk.com/robot/send?access_token=348d61c66dc7ba986ebd59696a2850f1697ed1b397995737a2213c6cc025217f"

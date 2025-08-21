@@ -78,3 +78,8 @@ eventbus:
   redis_prefix: "crawler"
   retention_days: 7
   cleanup_interval: 1h
+
+# Venue monitor configuration
+venue_monitor:
+  enabled: true
+  dingtalk_webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=348d61c66dc7ba986ebd59696a2850f1697ed1b397995737a2213c6cc025217f"

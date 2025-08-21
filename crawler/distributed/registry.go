@@ -134,7 +134,8 @@ func (r *Registry) RegisterNode(ctx context.Context, node *NodeInfo) error {
 
 	// Store in Redis
 	key := r.getNodeKey(node.ID)
-	if err := r.redis.Set(ctx, key, data, 0).Err(); err != nil {
+	// Set with 1 hour TTL (nodes should send heartbeat every 30 seconds)
+	if err := r.redis.Set(ctx, key, data, 1*time.Hour).Err(); err != nil {
 		return fmt.Errorf("failed to store node info: %w", err)
 	}
 
@@ -153,6 +154,8 @@ func (r *Registry) RegisterNode(ctx context.Context, node *NodeInfo) error {
 		for _, capability := range node.Capabilities {
 			capKey := r.getCapabilityKey(capability)
 			r.redis.SAdd(ctx, capKey, node.ID)
+			// Set TTL for capability set (1 hour, refreshed on heartbeat)
+			r.redis.Expire(ctx, capKey, 1*time.Hour)
 		}
 	}
 
@@ -161,6 +164,8 @@ func (r *Registry) RegisterNode(ctx context.Context, node *NodeInfo) error {
 		for _, tag := range node.Tags {
 			tagKey := r.getTagKey(tag)
 			r.redis.SAdd(ctx, tagKey, node.ID)
+			// Set TTL for tag set (1 hour, refreshed on heartbeat)
+			r.redis.Expire(ctx, tagKey, 1*time.Hour)
 		}
 	}
 
@@ -318,7 +323,8 @@ func (r *Registry) UpdateHeartbeat(ctx context.Context, heartbeat *Heartbeat) er
 	if err != nil {
 		return fmt.Errorf("failed to marshal node info: %w", err)
 	}
-	if err := r.redis.Set(ctx, nodeKey, nodeData, 0).Err(); err != nil {
+	// Update with 1 hour TTL (nodes should send heartbeat every 30 seconds)
+	if err := r.redis.Set(ctx, nodeKey, nodeData, 1*time.Hour).Err(); err != nil {
 		return fmt.Errorf("failed to update node info: %w", err)
 	}
 

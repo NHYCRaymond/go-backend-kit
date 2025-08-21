@@ -12,8 +12,11 @@ import (
 	"github.com/NHYCRaymond/go-backend-kit/config"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/communication"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/distributed"
+	"github.com/NHYCRaymond/go-backend-kit/crawler/monitor"
+	"github.com/NHYCRaymond/go-backend-kit/crawler/parser"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/scheduler"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
+	"github.com/NHYCRaymond/go-backend-kit/crawler/types"
 	"github.com/NHYCRaymond/go-backend-kit/database"
 	"github.com/NHYCRaymond/go-backend-kit/logging"
 	"github.com/go-redis/redis/v8"
@@ -215,6 +218,68 @@ func main() {
 		coordinator.SetScheduler(taskScheduler)
 	}
 
+	// Initialize Change Detector for venue monitoring
+	var changeDetector *monitor.ChangeDetector
+	// Get webhook URL from config, environment, or use default
+	webhookURL := viper.GetString("venue_monitor.dingtalk_webhook_url")
+	if webhookURL == "" {
+		webhookURL = os.Getenv("DINGTALK_WEBHOOK_URL")
+	}
+	if webhookURL == "" {
+		// Use default webhook URL if not configured
+		webhookURL = "https://oapi.dingtalk.com/robot/send?access_token=348d61c66dc7ba986ebd59696a2850f1697ed1b397995737a2213c6cc025217f"
+	}
+	
+	if mongoDatabase != nil && webhookURL != "" {
+		// Set webhook URL as environment variable for change detector
+		os.Setenv("DINGTALK_WEBHOOK_URL", webhookURL)
+		// Create change detector configuration
+		changeDetectorConfig := &types.ChangeDetectorConfig{
+			Enabled:                true,
+			WatchFields:            []string{"status", "available", "price"},
+			IgnoreFields:           []string{"updated_at", "crawled_at"},
+			SubscriptionAPIURL:     "", // Using enhanced subscription client
+			SubscriptionAPITimeout: 10,
+			CacheTTL:               60,
+			Workers:                5,
+			QueueSize:              1000,
+		}
+		
+		// Create change detector
+		changeDetector = monitor.NewChangeDetector(
+			mongoDatabase,
+			redisClient,
+			changeDetectorConfig,
+			logger,
+		)
+		
+		// Register venue parsers for 5 crawler sources
+		changeDetector.RegisterParser("drip_ground_board", parser.NewDripGroundBoardParser(mongoDatabase))
+		changeDetector.RegisterParser("venue_massage_site", parser.NewVenueMassageSiteParser())
+		changeDetector.RegisterParser("pospal_venue_5662377", parser.NewPospalVenue5662377Parser())
+		changeDetector.RegisterParser("pospal_venue_classroom", parser.NewPospalVenueClassroomParser())
+		changeDetector.RegisterParser("tennis_booking", parser.NewTennisBookingParser(mongoDatabase))
+		
+		// Start change detector
+		if err := changeDetector.Start(); err != nil {
+			logger.Error("Failed to start change detector", "error", err)
+		} else {
+			logger.Info("Change detector started for venue monitoring",
+				"webhook_configured", true,
+				"sources", []string{
+					"drip_ground_board",
+					"venue_massage_site",
+					"pospal_venue_5662377",
+					"pospal_venue_classroom",
+					"tennis_booking",
+				},
+				"monitored_hours", "19:00-22:00")
+		}
+		
+		// Set change detector in coordinator
+		coordinator.SetChangeDetector(changeDetector)
+	}
+
 	// Start Coordinator
 	if err := coordinator.Start(); err != nil {
 		log.Fatal("Failed to start coordinator:", err)
@@ -304,6 +369,15 @@ func main() {
 
 	if err := clusterManager.Stop(ctx); err != nil {
 		logger.Error("Failed to stop cluster manager", "error", err)
+	}
+
+	// Stop change detector if running
+	if changeDetector != nil {
+		if err := changeDetector.Stop(); err != nil {
+			logger.Error("Failed to stop change detector", "error", err)
+		} else {
+			logger.Info("Change detector stopped")
+		}
 	}
 
 	// Stop scheduler if running
