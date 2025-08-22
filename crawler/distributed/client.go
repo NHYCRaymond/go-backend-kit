@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -355,6 +356,42 @@ func (nc *NodeClient) handleTaskAssignment(assignment *pb.TaskAssignment) {
 			"storage_type", t.StorageConf.Type,
 			"database", t.StorageConf.Database,
 			"collection", t.StorageConf.Collection)
+	}
+	
+	// Extract batch information from metadata
+	if assignment.Metadata != nil {
+		if batchID, ok := assignment.Metadata["batch_id"]; ok && batchID != "" {
+			t.BatchID = batchID
+			nc.logger.Info("Task has batch ID", "task_id", t.ID, "batch_id", batchID)
+		}
+		if batchSize, ok := assignment.Metadata["batch_size"]; ok && batchSize != "" {
+			if size, err := strconv.Atoi(batchSize); err == nil {
+				t.BatchSize = size
+			}
+		}
+		if batchIndex, ok := assignment.Metadata["batch_index"]; ok && batchIndex != "" {
+			if index, err := strconv.Atoi(batchIndex); err == nil {
+				t.BatchIndex = index
+			}
+		}
+		if batchType, ok := assignment.Metadata["batch_type"]; ok && batchType != "" {
+			t.BatchType = batchType
+		}
+		// Extract source field
+		if source, ok := assignment.Metadata["source"]; ok && source != "" {
+			t.Source = source
+		}
+		
+		// Log batch information
+		if t.BatchID != "" {
+			nc.logger.Info("Task batch information extracted",
+				"task_id", t.ID,
+				"batch_id", t.BatchID,
+				"batch_size", t.BatchSize,
+				"batch_index", t.BatchIndex,
+				"batch_type", t.BatchType,
+				"source", t.Source)
+		}
 	}
 
 	// Add to node's task queue

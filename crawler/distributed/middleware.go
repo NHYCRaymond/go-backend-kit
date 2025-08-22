@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/compression"
 	"github.com/go-redis/redis/v8"
 )
@@ -95,14 +96,14 @@ func (cm *CompressionMiddleware) Process(ctx context.Context, result *TaskResult
 	resultKey := fmt.Sprintf("%s:result:%s", cm.redisPrefix, result.TaskID)
 	
 	// Try to use optimized storage
-	if err := cm.optimizer.OptimizedRedisSet(ctx, resultKey, result, 30*time.Minute); err != nil {
+	if err := cm.optimizer.OptimizedRedisSet(ctx, resultKey, result, common.DefaultResultTTL); err != nil {
 		cm.logger.Error("Failed to store compressed task result",
 			"task_id", result.TaskID,
 			"error", err)
 		
 		// Fallback to uncompressed storage
 		if data, err := json.Marshal(result); err == nil {
-			cm.redis.Set(ctx, resultKey, data, 30*time.Minute)
+			cm.redis.Set(ctx, resultKey, data, common.DefaultResultTTL)
 		}
 	} else {
 		// Log compression success
@@ -150,14 +151,14 @@ func (em *EventPublishMiddleware) Process(ctx context.Context, result *TaskResul
 	}
 
 	if eventJSON, err := json.Marshal(event); err == nil {
-		if err := em.redis.RPush(ctx, "crawler:tasks:completed", eventJSON).Err(); err != nil {
+		if err := em.redis.RPush(ctx, common.BuildRedisKey(common.DefaultRedisPrefix, common.RedisKeyTasksCompleted), eventJSON).Err(); err != nil {
 			em.logger.Error("Failed to publish task event",
 				"task_id", result.TaskID,
 				"error", err)
 		} else {
 			em.logger.Info("Published task event",
 				"task_id", result.TaskID,
-				"queue", "crawler:tasks:completed")
+				"queue", common.BuildRedisKey(common.DefaultRedisPrefix, common.RedisKeyTasksCompleted))
 		}
 	}
 

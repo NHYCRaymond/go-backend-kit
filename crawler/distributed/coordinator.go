@@ -88,9 +88,15 @@ func (c *Coordinator) SetScheduler(scheduler TaskResultUpdater) {
 
 // setupDefaultMiddleware sets up default middleware chain
 func (c *Coordinator) setupDefaultMiddleware() {
-	// Add event publishing middleware
-	eventMiddleware := NewEventPublishMiddleware(c.redis, c.logger)
-	c.middlewareChain.Use(eventMiddleware)
+	// Add batch aggregator middleware (should be first to handle batch logic)
+	batchMiddleware := NewBatchAggregatorMiddleware(c.redis, c.config.RedisPrefix, c.logger)
+	c.middlewareChain.Use(batchMiddleware)
+	
+	// Add event publishing middleware (for non-batch tasks, handled by batch middleware)
+	// Note: Batch middleware will handle event publishing for both batch and non-batch tasks
+	// So we can skip the event middleware here to avoid duplicate events
+	// eventMiddleware := NewEventPublishMiddleware(c.redis, c.logger)
+	// c.middlewareChain.Use(eventMiddleware)
 	
 	// Add metrics middleware
 	metricsMiddleware := NewMetricsMiddleware(c.logger)
@@ -192,42 +198,35 @@ func (c *Coordinator) distributeTaskBatch() {
 	tasksKey := fmt.Sprintf("%s:queue:tasks:pending", c.config.RedisPrefix)
 	
 	// Pop tasks from Redis queue
-	taskIDs, err := c.redis.LRange(ctx, tasksKey, 0, int64(c.config.BatchSize-1)).Result()
-	if err != nil || len(taskIDs) == 0 {
+	taskDataList, err := c.redis.LRange(ctx, tasksKey, 0, int64(c.config.BatchSize-1)).Result()
+	if err != nil || len(taskDataList) == 0 {
 		return
 	}
 	
 	// Remove fetched tasks from queue
-	c.redis.LTrim(ctx, tasksKey, int64(len(taskIDs)), -1)
+	c.redis.LTrim(ctx, tasksKey, int64(len(taskDataList)), -1)
 	
 	// Distribute tasks to nodes
-	for i, taskID := range taskIDs {
+	for i, taskData := range taskDataList {
 		// Select node (round-robin for simplicity)
 		node := activeNodes[i%len(activeNodes)]
 		
-		// Get task details
-		taskKey := fmt.Sprintf("%s:task:%s", c.config.RedisPrefix, taskID)
-		taskData, err := c.redis.Get(ctx, taskKey).Result()
-		if err != nil {
-			c.logger.Error("Failed to get task", "task_id", taskID, "error", err)
-			continue
-		}
-		
+		// Parse task from JSON
 		var t task.Task
 		if err := json.Unmarshal([]byte(taskData), &t); err != nil {
-			c.logger.Error("Failed to unmarshal task", "task_id", taskID, "error", err)
+			c.logger.Error("Failed to unmarshal task", "error", err)
 			continue
 		}
 		
 		// Assign task to node
 		if err := c.assignTaskToNode(&t, node); err != nil {
 			c.logger.Error("Failed to assign task", 
-				"task_id", taskID,
+				"task_id", t.ID,
 				"node_id", node.ID,
 				"error", err)
 			
 			// Return task to queue
-			c.redis.RPush(ctx, tasksKey, taskID)
+			c.redis.RPush(ctx, tasksKey, taskData)
 		}
 	}
 }
@@ -262,6 +261,19 @@ func (c *Coordinator) assignTaskToNode(t *task.Task, node *NodeInfo) error {
 		if str, ok := v.(string); ok {
 			assignment.Metadata[k] = str
 		}
+	}
+	
+	// Add batch information to metadata
+	if t.BatchID != "" {
+		assignment.Metadata["batch_id"] = t.BatchID
+		assignment.Metadata["batch_size"] = fmt.Sprintf("%d", t.BatchSize)
+		assignment.Metadata["batch_index"] = fmt.Sprintf("%d", t.BatchIndex)
+		assignment.Metadata["batch_type"] = t.BatchType
+	}
+	
+	// Add source field to metadata
+	if t.Source != "" {
+		assignment.Metadata["source"] = t.Source
 	}
 	
 	// Log Lua script configuration

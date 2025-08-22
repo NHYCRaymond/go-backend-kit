@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/core"
 	"github.com/go-redis/redis/v8"
 )
@@ -39,7 +40,7 @@ func (ms *MemoryStorage) Store(ctx context.Context, key string, value interface{
 	
 	ms.data[key] = value
 	// Default TTL of 24 hours
-	ms.ttl[key] = time.Now().Add(24 * time.Hour)
+	ms.ttl[key] = time.Now().Add(common.DefaultCacheTTL)
 	
 	return nil
 }
@@ -107,7 +108,7 @@ func (ms *MemoryStorage) BatchStore(ctx context.Context, items map[string]interf
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	
-	defaultExpiry := time.Now().Add(24 * time.Hour)
+	defaultExpiry := time.Now().Add(common.DefaultCacheTTL)
 	for key, value := range items {
 		ms.data[key] = value
 		ms.ttl[key] = defaultExpiry
@@ -239,7 +240,7 @@ func (ms *MemoryStorage) Save(ctx context.Context, collection string, data []map
 	for i, item := range data {
 		key := fmt.Sprintf("%s:%d:%d", collection, time.Now().UnixNano(), i)
 		ms.data[key] = item
-		ms.ttl[key] = time.Now().Add(24 * time.Hour)
+		ms.ttl[key] = time.Now().Add(common.DefaultCacheTTL)
 	}
 	
 	return nil

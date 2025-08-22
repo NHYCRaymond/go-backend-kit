@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/factory"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/fetcher"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
@@ -129,6 +130,17 @@ type TaskResult struct {
 	EndTime   time.Time                `json:"end_time"`
 	Duration  time.Duration            `json:"duration"`
 	BytesRead int64                    `json:"bytes_read"`
+	
+	// Batch management fields
+	BatchID    string                 `json:"batch_id,omitempty"`    // Batch identifier
+	BatchSize  int                    `json:"batch_size,omitempty"`  // Total tasks in batch
+	BatchIndex int                    `json:"batch_index,omitempty"` // Index in batch
+	BatchType  string                 `json:"batch_type,omitempty"`  // Batch type
+	
+	// Additional metadata from task
+	ProjectID  string                 `json:"project_id,omitempty"`
+	Source     string                 `json:"source,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // NewNode creates a new node
@@ -164,7 +176,7 @@ func NewNode(config *NodeConfig) (*Node, error) {
 
 	// Get local IP address
 	logger.Info("Getting local IP address")
-	localIP := "127.0.0.1"
+	localIP := common.DefaultBindIP
 	if addrs, err := net.InterfaceAddrs(); err == nil {
 		for _, addr := range addrs {
 			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
@@ -365,7 +377,7 @@ func (n *Node) Stop(ctx context.Context) error {
 	close(n.stopChan)
 
 	// Wait for workers to finish current tasks
-	timeout := time.After(30 * time.Second)
+	timeout := time.After(common.DefaultTimeout)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -456,7 +468,7 @@ func (n *Node) unregister(ctx context.Context) error {
 
 // heartbeat sends periodic heartbeat
 func (n *Node) heartbeat(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(common.DefaultHeartbeatTimeout)
 	defer ticker.Stop()
 
 	for {
@@ -541,8 +553,7 @@ func (n *Node) fetchBatch(ctx context.Context) {
 
 	// Try to fetch from multiple queues
 	queues := []string{
-		n.getTaskQueueKey(),                                   // Node-specific queue
-		fmt.Sprintf("%s:queue:pending", n.config.RedisPrefix), // General pending queue
+		n.getTaskQueueKey(), // Node-specific queue only
 	}
 
 	// Fetch tasks from Redis queues
@@ -577,11 +588,15 @@ func (n *Node) fetchBatch(ctx context.Context) {
 		}
 		
 		// Debug: Log what we received
-		n.logger.Debug("Unmarshaled task from Redis",
+		n.logger.Info("Unmarshaled task from Redis",
 			"task_id", t.ID,
+			"batch_id", t.BatchID,
+			"batch_size", t.BatchSize,
+			"batch_type", t.BatchType,
+			"batch_index", t.BatchIndex,
+			"has_batch", t.BatchID != "",
 			"has_cookies", len(t.Cookies) > 0,
-			"body_len", len(t.Body),
-			"body_preview", string(t.Body))
+			"body_len", len(t.Body))
 
 		// Add to local queue
 		select {
@@ -589,7 +604,9 @@ func (n *Node) fetchBatch(ctx context.Context) {
 			n.logger.Info("Task queued for processing", 
 				"task_id", t.ID,
 				"url", t.URL,
-				"type", t.Type)
+				"type", t.Type,
+				"batch_id", t.BatchID,
+				"batch_size", t.BatchSize)
 		default:
 			// Queue full, return task to Redis (to the general queue)
 			n.redis.LPush(ctx, fmt.Sprintf("%s:queue:pending", n.config.RedisPrefix), taskData)
@@ -645,12 +662,31 @@ func (w *Worker) processTask(ctx context.Context, t *task.Task) {
 		"depth", t.Depth,
 		"retry_count", t.RetryCount)
 
-	// Create result with task metadata
+	// Log batch info for debugging
+	if t.BatchID != "" {
+		w.Node.logger.Info("Processing batch task",
+			"task_id", t.ID,
+			"batch_id", t.BatchID,
+			"batch_size", t.BatchSize,
+			"batch_index", t.BatchIndex,
+			"batch_type", t.BatchType)
+	}
+	
+	// Create result with task metadata including batch info
 	result := &TaskResult{
 		TaskID:    t.ID,
 		NodeID:    w.Node.ID,
 		WorkerID:  w.ID,
 		StartTime: startTime,
+		// Batch management fields from task
+		BatchID:    t.BatchID,
+		BatchSize:  t.BatchSize,
+		BatchIndex: t.BatchIndex,
+		BatchType:  t.BatchType,
+		// Additional metadata
+		ProjectID: t.ProjectID,
+		Source:    t.Source,
+		Metadata:  t.Metadata,
 		// Store task URL and other metadata in Data for display
 		Data: []map[string]interface{}{
 			{
@@ -698,6 +734,15 @@ func (w *Worker) processTask(ctx context.Context, t *task.Task) {
 
 	result.EndTime = time.Now()
 	result.Duration = result.EndTime.Sub(result.StartTime)
+
+	// Log batch info in result before sending
+	if result.BatchID != "" {
+		w.Node.logger.Info("Sending batch task result",
+			"task_id", result.TaskID,
+			"batch_id", result.BatchID,
+			"batch_size", result.BatchSize,
+			"status", result.Status)
+	}
 
 	// Send result
 	select {
@@ -840,7 +885,7 @@ func (n *Node) handleResult(ctx context.Context, result *TaskResult) {
 	}
 
 	// Keep results for 30 minutes only (large data volume)
-	if err := n.redis.Set(ctx, resultKey, resultData, 30*time.Minute).Err(); err != nil {
+	if err := n.redis.Set(ctx, resultKey, resultData, common.DefaultResultTTL).Err(); err != nil {
 		n.logger.Error("Failed to store task result in Redis",
 			"task_id", result.TaskID,
 			"error", err)
@@ -862,7 +907,7 @@ func (n *Node) handleResult(ctx context.Context, result *TaskResult) {
 	n.redis.HSet(ctx, taskKey, "status", result.Status)
 	n.redis.HSet(ctx, taskKey, "completed_at", time.Now().Format(time.RFC3339))
 	// Set TTL for task data (30 minutes for completed tasks)
-	n.redis.Expire(ctx, taskKey, 30*time.Minute)
+	n.redis.Expire(ctx, taskKey, common.DefaultResultTTL)
 
 	// Notify completion
 	if result.Status == "success" {
@@ -879,7 +924,7 @@ func (n *Node) handleResult(ctx context.Context, result *TaskResult) {
 
 // reportMetrics reports node metrics
 func (n *Node) reportMetrics(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(common.DefaultGRPCTimeout)
 	defer ticker.Stop()
 
 	for {

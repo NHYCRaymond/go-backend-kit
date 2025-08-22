@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -20,7 +21,7 @@ type Service struct {
 
 // NewService 创建任务服务
 func NewService(db *mongo.Database) *Service {
-	collection := db.Collection("crawler_tasks")
+	collection := db.Collection(common.DefaultTasksCollection)
 	
 	// 创建索引
 	ctx := context.Background()

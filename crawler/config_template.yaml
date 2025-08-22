@@ -1,0 +1,96 @@
+# Crawler Configuration Template
+# This template defines all configurable values for the crawler system
+# Environment variables can override these values
+
+# Server configuration
+server:
+  host: "${SERVER_HOST:0.0.0.0}"
+  port: "${SERVER_PORT:8080}"
+  env: "${SERVER_ENV:production}"
+
+# Redis configuration
+redis:
+  address: "${REDIS_ADDRESS:localhost:6379}"
+  password: "${REDIS_PASSWORD:}"
+  db: "${REDIS_DB:0}"
+  prefix: "${REDIS_PREFIX:crawler}"
+  
+  # Redis key patterns
+  keys:
+    logs_stream: "${prefix}:logs:stream"
+    logs_pubsub: "${prefix}:logs:pubsub"
+    results: "${prefix}:result"
+    stats_completed: "${prefix}:stats:completed_tasks"
+    stats_failed: "${prefix}:stats:failed_tasks"
+    queue_pending: "${prefix}:queue:pending"
+    tasks_completed: "${prefix}:tasks:completed"
+    nodes: "${prefix}:nodes"
+    task_assignments: "${prefix}:tasks:assignments"
+
+# Database configuration
+database:
+  # MongoDB configuration
+  mongo:
+    uri: "${MONGO_URI:mongodb://localhost:27017}"
+    database: "${MONGO_DATABASE:crawler}"
+    collections:
+      tasks: "${MONGO_TASKS_COLLECTION:crawler_tasks}"
+    
+  # MySQL configuration (optional)
+  mysql:
+    host: "${MYSQL_HOST:}"
+    port: "${MYSQL_PORT:3306}"
+    user: "${MYSQL_USER:root}"
+    password: "${MYSQL_PASSWORD:}"
+    dbname: "${MYSQL_DBNAME:crawler}"
+    table: "${MYSQL_TABLE:crawler_storage}"
+
+# Timeout configuration
+timeouts:
+  default: "${TIMEOUT_DEFAULT:30s}"
+  task: "${TIMEOUT_TASK:30m}"
+  heartbeat: "${TIMEOUT_HEARTBEAT:5s}"
+  grpc: "${TIMEOUT_GRPC:10s}"
+  fetch: "${TIMEOUT_FETCH:30s}"
+  shutdown: "${TIMEOUT_SHUTDOWN:30s}"
+  reassign: "${TIMEOUT_REASSIGN:30s}"
+  watch: "${TIMEOUT_WATCH:30s}"
+
+# TTL and retention configuration
+storage:
+  cache_ttl: "${STORAGE_CACHE_TTL:24h}"
+  result_ttl: "${STORAGE_RESULT_TTL:30m}"
+  retention_days: "${STORAGE_RETENTION_DAYS:7}"
+  cleanup_interval: "${STORAGE_CLEANUP_INTERVAL:10m}"
+
+# Limits and sizes
+limits:
+  max_retries: "${LIMITS_MAX_RETRIES:3}"
+  batch_size: "${LIMITS_BATCH_SIZE:10}"
+  max_workers: "${LIMITS_MAX_WORKERS:10}"
+  queue_size: "${LIMITS_QUEUE_SIZE:100}"
+  max_log_entries: "${LIMITS_MAX_LOG_ENTRIES:1000}"
+  log_buffer_size: "${LIMITS_LOG_BUFFER_SIZE:100}"
+  max_connections: "${LIMITS_MAX_CONNECTIONS:100}"
+  max_idle_conns: "${LIMITS_MAX_IDLE_CONNS:10}"
+  max_open_conns: "${LIMITS_MAX_OPEN_CONNS:100}"
+  conn_max_lifetime: "${LIMITS_CONN_MAX_LIFETIME:3600}"
+
+# Network configuration
+network:
+  bind_ip: "${NETWORK_BIND_IP:127.0.0.1}"
+  grpc_port: "${NETWORK_GRPC_PORT:50051}"
+  http_port: "${NETWORK_HTTP_PORT:8080}"
+
+# Crawler specific configuration
+crawler:
+  mode: "${CRAWLER_MODE:distributed}"
+  script_base: "${CRAWLER_SCRIPT_BASE:./scripts}"
+  log_level: "${CRAWLER_LOG_LEVEL:info}"
+
+# Feature flags
+features:
+  enable_compression: "${FEATURE_COMPRESSION:true}"
+  enable_metrics: "${FEATURE_METRICS:true}"
+  enable_monitoring: "${FEATURE_MONITORING:true}"
+  enable_scheduler: "${FEATURE_SCHEDULER:true}"

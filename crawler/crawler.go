@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/core"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/distributed"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/fetcher"
@@ -387,7 +388,7 @@ func (c *Crawler) initDispatcher() error {
 		dispatcherConfig = &task.DispatcherConfig{
 			Strategy:   task.StrategyRoundRobin,
 			MaxRetries: c.config.MaxRetries,
-			Timeout:    30 * time.Second,
+			Timeout:    common.DefaultTimeout,
 		}
 	}
 
@@ -588,7 +589,7 @@ func (c *Crawler) Stop(ctx context.Context) error {
 	select {
 	case <-done:
 		// Workers stopped gracefully
-	case <-time.After(30 * time.Second):
+	case <-time.After(common.DefaultTimeout):
 		c.logger.Warn("Timeout waiting for workers to stop")
 	}
 
@@ -1023,19 +1024,19 @@ func validateConfig(config *Config) error {
 	}
 
 	if config.MaxRetries <= 0 {
-		config.MaxRetries = 3
+		config.MaxRetries = common.DefaultMaxRetries
 	}
 
 	if config.Timeout <= 0 {
-		config.Timeout = 30 * time.Second
+		config.Timeout = common.DefaultTimeout
 	}
 
 	if config.RedisAddr == "" {
-		config.RedisAddr = "localhost:6379"
+		config.RedisAddr = common.DefaultRedisAddr
 	}
 
 	if config.RedisPrefix == "" {
-		config.RedisPrefix = "crawler"
+		config.RedisPrefix = common.DefaultRedisPrefix
 	}
 
 	if config.LogLevel == "" {

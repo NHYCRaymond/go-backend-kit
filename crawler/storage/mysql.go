@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"github.com/NHYCRaymond/go-backend-kit/database"
 	"gorm.io/gorm"
 )
@@ -43,12 +44,12 @@ func NewMySQLStorage(db *database.MySQLDatabase, config StorageConfig) (*MySQLSt
 	
 	table := config.Table
 	if table == "" {
-		table = "crawler_storage"
+		table = common.DefaultStorageTable
 	}
 	
 	ttl := time.Duration(config.TTL) * time.Second
 	if ttl == 0 {
-		ttl = 24 * time.Hour
+		ttl = common.DefaultCacheTTL
 	}
 	
 	storage := &MySQLStorage{
@@ -72,7 +73,7 @@ func NewMySQLStorage(db *database.MySQLDatabase, config StorageConfig) (*MySQLSt
 
 // TableName returns the table name for GORM
 func (r *MySQLRecord) TableName() string {
-	return "crawler_storage"
+	return common.DefaultStorageTable
 }
 
 // autoMigrate creates or updates the table structure

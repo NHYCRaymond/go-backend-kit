@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
 	"github.com/go-redis/redis/v8"
 	"github.com/robfig/cron/v3"
@@ -90,7 +91,7 @@ func (s *Scheduler) Stop() {
 
 // loadTasks loads all enabled tasks from MongoDB
 func (s *Scheduler) loadTasks(ctx context.Context) error {
-	collection := s.mongodb.Collection("crawler_tasks")
+	collection := s.mongodb.Collection(common.DefaultTasksCollection)
 
 	// Find all enabled tasks
 	filter := bson.M{"status.enabled": true}
@@ -161,7 +162,7 @@ func (s *Scheduler) scheduleTask(doc *task.TaskDocument) error {
 		entryID, err := s.cron.AddFunc(fmt.Sprintf("@every %s", duration), func() {
 			// Reload the task document to get latest next_run
 			ctx := context.Background()
-			collection := s.mongodb.Collection("crawler_tasks")
+			collection := s.mongodb.Collection(common.DefaultTasksCollection)
 			
 			var currentDoc task.TaskDocument
 			if err := collection.FindOne(ctx, bson.M{"_id": doc.ID}).Decode(&currentDoc); err != nil {
@@ -225,9 +226,16 @@ func (s *Scheduler) submitTask(doc *task.TaskDocument) {
 	
 	// Check variables for date type with strategy
 	for _, v := range doc.Request.Variables {
+		s.logger.Debug("Checking variable",
+			"name", v.Name,
+			"type", v.Type,
+			"has_strategy", v.Strategy != nil)
 		if v.Type == "date" && v.Name == "DATE" {
 			hasDateVariable = true
 			dateStrategy = v.Strategy
+			s.logger.Info("Found DATE variable with strategy",
+				"task_name", doc.Name,
+				"strategy_mode", dateStrategy.Mode)
 			break
 		}
 	}
@@ -244,9 +252,14 @@ func (s *Scheduler) submitTask(doc *task.TaskDocument) {
 	}
 	
 	if hasDateVariable {
+		s.logger.Info("Submitting tasks with date strategy",
+			"task_name", doc.Name,
+			"has_strategy", dateStrategy != nil)
 		s.submitTasksWithDateStrategy(doc, dateStrategy)
 	} else {
 		// No date variable, submit as single task
+		s.logger.Info("Submitting single task (no date variable)",
+			"task_name", doc.Name)
 		execTask := s.convertToTask(doc)
 		s.submitSingleTask(ctx, execTask, doc)
 	}
@@ -306,9 +319,29 @@ func (s *Scheduler) submitTasksWithDateStrategy(doc *task.TaskDocument, strategy
 		}
 	}
 	
-	// Submit task for each date
-	for _, date := range dates {
-		s.submitTaskForDate(doc, date)
+	// Create batch for multiple dates
+	if len(dates) > 1 {
+		// Generate batch ID for this group of tasks
+		batchID := fmt.Sprintf("%s_batch_%d", doc.ID.Hex(), time.Now().UnixNano())
+		batchType := "scheduled_batch"
+		if doc.Name != "" {
+			// Use task name as batch type for better identification
+			batchType = strings.ReplaceAll(strings.ToLower(doc.Name), " ", "_")
+		}
+		
+		s.logger.Info("Creating batch for date strategy tasks",
+			"batch_id", batchID,
+			"batch_size", len(dates),
+			"batch_type", batchType,
+			"task_name", doc.Name)
+		
+		// Submit tasks as a batch
+		for i, date := range dates {
+			s.submitTaskForDateWithBatch(doc, date, batchID, batchType, len(dates), i)
+		}
+	} else if len(dates) == 1 {
+		// Single date, no batch needed
+		s.submitTaskForDate(doc, dates[0])
 	}
 }
 
@@ -324,6 +357,31 @@ func (s *Scheduler) submitTaskForDate(doc *task.TaskDocument, targetDate time.Ti
 		"date", targetDate.Format("2006-01-02"),
 		"url", execTask.URL,
 		"body_preview", string(execTask.Body))
+	
+	s.submitSingleTask(ctx, execTask, doc)
+}
+
+// submitTaskForDateWithBatch creates and submits a task as part of a batch
+func (s *Scheduler) submitTaskForDateWithBatch(doc *task.TaskDocument, targetDate time.Time, batchID string, batchType string, batchSize int, batchIndex int) {
+	ctx := context.Background()
+	
+	// Convert TaskDocument to executable Task with specific date
+	execTask := s.convertToTask(doc, targetDate)
+	
+	// Add batch information
+	execTask.BatchID = batchID
+	execTask.BatchType = batchType
+	execTask.BatchSize = batchSize
+	execTask.BatchIndex = batchIndex
+	
+	s.logger.Info("Task converted for date with batch",
+		"task_id", execTask.ID,
+		"date", targetDate.Format("2006-01-02"),
+		"batch_id", batchID,
+		"batch_type", batchType,
+		"batch_index", batchIndex,
+		"batch_size", batchSize,
+		"url", execTask.URL)
 	
 	s.submitSingleTask(ctx, execTask, doc)
 }
@@ -346,9 +404,9 @@ func (s *Scheduler) submitSingleTask(ctx context.Context, execTask *task.Task, d
 		return
 	}
 	
-	// Push task ID to Redis queue - must match Coordinator's expected queue name
+	// Push full task data to Redis queue - must match Coordinator's expected queue name
 	queueKey := fmt.Sprintf("%s:queue:tasks:pending", s.queuePrefix)
-	if err := s.redis.LPush(ctx, queueKey, execTask.ID).Err(); err != nil {
+	if err := s.redis.LPush(ctx, queueKey, data).Err(); err != nil {
 		s.logger.Error("Failed to submit task to queue",
 			"task_id", execTask.ID,
 			"queue", queueKey,
@@ -447,6 +505,7 @@ func (s *Scheduler) convertToTask(doc *task.TaskDocument, options ...interface{}
 		// Metadata
 		CreatedAt: time.Now(),
 		Status:    task.StatusPending,
+		Source:    doc.Category, // Set source from task category
 
 		// Storage configuration
 		StorageConf: s.buildStorageConfig(doc.Storage),
@@ -514,7 +573,7 @@ func (s *Scheduler) calculateNextRun(schedule task.ScheduleConfig) time.Time {
 
 // updateTaskStatus updates task status in MongoDB
 func (s *Scheduler) updateTaskStatus(ctx context.Context, taskID primitive.ObjectID, status string) {
-	collection := s.mongodb.Collection("crawler_tasks")
+	collection := s.mongodb.Collection(common.DefaultTasksCollection)
 
 	// Get task document to retrieve schedule information
 	var doc task.TaskDocument
@@ -567,7 +626,7 @@ func (s *Scheduler) UpdateTaskResult(ctx context.Context, taskInstanceID string,
 		return
 	}
 	
-	collection := s.mongodb.Collection("crawler_tasks")
+	collection := s.mongodb.Collection(common.DefaultTasksCollection)
 	
 	// Get task document to retrieve schedule information for next_run calculation
 	var doc task.TaskDocument
@@ -784,7 +843,7 @@ func (s *Scheduler) watchTasks(ctx context.Context) {
 
 // checkOverdueTasks checks for tasks that are overdue and should run
 func (s *Scheduler) checkOverdueTasks(ctx context.Context) {
-	collection := s.mongodb.Collection("crawler_tasks")
+	collection := s.mongodb.Collection(common.DefaultTasksCollection)
 	
 	// Find enabled tasks where next_run is in the past
 	now := time.Now()
@@ -821,7 +880,7 @@ func (s *Scheduler) checkOverdueTasks(ctx context.Context) {
 
 // RunTaskNow immediately runs a task (called from TUI)
 func (s *Scheduler) RunTaskNow(ctx context.Context, taskID string) error {
-	collection := s.mongodb.Collection("crawler_tasks")
+	collection := s.mongodb.Collection(common.DefaultTasksCollection)
 
 	// Find the task
 	objID, err := primitive.ObjectIDFromHex(taskID)

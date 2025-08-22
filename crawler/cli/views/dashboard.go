@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/distributed"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/task"
 	"github.com/go-redis/redis/v8"
@@ -359,7 +360,7 @@ func (d *Dashboard) refreshNodes(ctx context.Context) {
 func (d *Dashboard) refreshTasks(ctx context.Context) {
 	// Try to get recent task results from Redis
 	// First try to get from result keys
-	resultKeys, err := d.redis.Keys(ctx, "crawler:result:*").Result()
+	resultKeys, err := d.redis.Keys(ctx, common.BuildRedisPattern(common.DefaultRedisPrefix, common.RedisKeyResults)).Result()
 	
 	// If error or no data, don't clear the table - keep showing old data
 	if err != nil || len(resultKeys) == 0 {
@@ -455,7 +456,7 @@ func (d *Dashboard) refreshTasks(ctx context.Context) {
 				objectID, err := primitive.ObjectIDFromHex(parts[0])
 				if err == nil {
 					var taskDoc task.TaskDocument
-					collection := d.mongodb.Collection("crawler_tasks")
+					collection := d.mongodb.Collection(common.DefaultTasksCollection)
 					if err := collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&taskDoc); err == nil {
 						url = taskDoc.Request.URL
 					}
@@ -539,9 +540,9 @@ func (d *Dashboard) refreshMetrics(ctx context.Context) {
 
 	// Get additional metrics from Redis
 	pipe := d.redis.Pipeline()
-	completedTasks := pipe.Get(ctx, "crawler:stats:completed_tasks")
-	failedTasks := pipe.Get(ctx, "crawler:stats:failed_tasks")
-	pendingTasks := pipe.LLen(ctx, "crawler:queue:pending")
+	completedTasks := pipe.Get(ctx, common.BuildRedisKey(common.DefaultRedisPrefix, common.RedisKeyStatsCompleted))
+	failedTasks := pipe.Get(ctx, common.BuildRedisKey(common.DefaultRedisPrefix, common.RedisKeyStatsFailed))
+	pendingTasks := pipe.LLen(ctx, common.BuildRedisKey(common.DefaultRedisPrefix, common.RedisKeyQueuePending))
 
 	_, _ = pipe.Exec(ctx)
 

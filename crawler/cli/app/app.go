@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/NHYCRaymond/go-backend-kit/crawler/common"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/cli/views"
 	"github.com/NHYCRaymond/go-backend-kit/crawler/distributed"
 	"github.com/NHYCRaymond/go-backend-kit/logging/store"
@@ -163,10 +164,10 @@ func (a *App) initViews() {
 	// Enhanced Logs view with modular logging system
 	logStore := store.NewRedisStore(store.RedisConfig{
 		Client:     a.redisClient,
-		StreamKey:  "crawler:logs:stream",
-		PubSubKey:  "crawler:logs:pubsub",
-		MaxLen:     1000,
-		BufferSize: 100,
+		StreamKey:  common.BuildRedisKey("crawler", common.RedisKeyLogsStream),
+		PubSubKey:  common.BuildRedisKey("crawler", common.RedisKeyLogsPubSub),
+		MaxLen:     common.DefaultMaxLogEntries,
+		BufferSize: common.DefaultLogBufferSize,
 	})
 	
 	a.logs = views.NewEnhancedLogsView(&views.EnhancedLogsConfig{
@@ -180,7 +181,7 @@ func (a *App) initViews() {
 	// Config view
 	a.config = views.NewConfigView(&views.ConfigConfig{
 		Redis:  a.redisClient,
-		Prefix: "crawler",
+		Prefix: common.DefaultRedisPrefix,
 		Logger: a.logger,
 	})
 

@@ -97,6 +97,12 @@ type Task struct {
 	// Lua script support
 	ProjectID string `json:"project_id,omitempty"` // Project identifier for Lua scripts
 	LuaScript string `json:"lua_script,omitempty"` // Lua script name (not path)
+	
+	// Batch management
+	BatchID    string `json:"batch_id,omitempty"`    // Batch identifier
+	BatchSize  int    `json:"batch_size,omitempty"`  // Total tasks in batch
+	BatchIndex int    `json:"batch_index,omitempty"` // Index in batch
+	BatchType  string `json:"batch_type,omitempty"`  // Batch type (e.g., "venue_monitor")
 
 	// Callbacks
 	OnSuccess  string `json:"on_success,omitempty"`  // Webhook or queue for success
